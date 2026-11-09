@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Tradutor por Voz · Zebubit</title>
+<style>
+  :root{
+    --eu:#1D5FD1; --eu-c:#EEF4FF;
+    --ele:#0E7C66; --ele-c:#E9F7F2;
+    --ink:#14171C; --mut:#5A6170; --linha:#E3E7EE; --bg:#0b1220;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:var(--bg);color:#fff;display:flex;flex-direction:column;overflow:hidden}
+  .top{padding:10px 14px;display:flex;align-items:center;gap:10px;background:#0b1220;border-bottom:1px solid #1c2740}
+  .top b{font-size:15px;letter-spacing:.02em}
+  .top select{margin-left:auto;background:#17203a;color:#fff;border:1px solid #2a3858;border-radius:10px;padding:8px 10px;font-size:15px}
+  .cards{flex:1;display:flex;flex-direction:column;min-height:0}
+  .card{flex:1;display:flex;flex-direction:column;justify-content:center;padding:18px 18px;min-height:0;position:relative;overflow:hidden}
+  .card.ele{background:var(--ele-c);color:var(--ink)}
+  .card.eu{background:var(--eu-c);color:var(--ink)}
+  .card.flip{transform:rotate(180deg)}
+  .rot{font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;opacity:.7;margin-bottom:8px}
+  .card.ele .rot{color:var(--ele)}
+  .card.eu .rot{color:var(--eu)}
+  .orig{font-size:16px;opacity:.6;margin-bottom:8px;min-height:20px}
+  .trad{font-size:30px;font-weight:700;line-height:1.15}
+  .status{font-size:13px;opacity:.55;margin-top:10px;min-height:16px}
+  .btns{display:flex;gap:1px;background:#1c2740}
+  .btn{flex:1;border:0;color:#fff;padding:20px 8px 26px;font-size:17px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;transition:filter .1s}
+  .btn:active{filter:brightness(1.2)}
+  .btn.ele{background:var(--ele)}
+  .btn.eu{background:var(--eu)}
+  .btn .mic{width:26px;height:26px}
+  .btn.gravando{animation:pulse .9s infinite}
+  @keyframes pulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.4)}}
+  .barra-cfg{display:flex;align-items:center;gap:8px;padding:6px 14px;background:#0b1220;border-top:1px solid #1c2740;font-size:13px;color:#8a97b0}
+  .barra-cfg label{display:flex;align-items:center;gap:6px}
+  .aviso{position:fixed;inset:0;background:#0b1220;display:flex;align-items:center;justify-content:center;padding:30px;text-align:center;font-size:16px;line-height:1.5;z-index:9}
+  .aviso div{max-width:300px}
+  .aviso button{margin-top:18px;background:var(--eu);color:#fff;border:0;border-radius:12px;padding:14px 22px;font-size:17px;font-weight:700}
+</style>
+</head>
+<body>
+  <div class="top">
+    <b>Tradutor por Voz</b>
+    <select id="idioma" aria-label="Idioma da outra pessoa"></select>
+  </div>
+
+  <div class="cards">
+    <div class="card ele" id="cardEle">
+      <div class="rot" id="rotEle">Outra pessoa</div>
+      <div class="orig" id="origEle"></div>
+      <div class="trad" id="tradEle">Toque no botão verde e fale.</div>
+      <div class="status" id="statusEle"></div>
+    </div>
+    <div class="card eu" id="cardEu">
+      <div class="rot">Você · Português</div>
+      <div class="orig" id="origEu"></div>
+      <div class="trad" id="tradEu">Toque no botão azul e fale.</div>
+      <div class="status" id="statusEu"></div>
+    </div>
+  </div>
+
+  <div class="btns">
+    <button class="btn ele" id="btnEle">
+      <svg class="mic" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      <span id="lblEle">Falar inglês</span>
+    </button>
+    <button class="btn eu" id="btnEu">
+      <svg class="mic" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      <span>Falar português</span>
+    </button>
+  </div>
+
+  <div class="barra-cfg">
+    <label><input type="checkbox" id="flip"> Virar o texto da outra pessoa (modo mesa)</label>
+  </div>
+
+  <div class="aviso" id="aviso">
+    <div>
+      Toque para começar.<br><br>
+      Deixe o celular na mesa entre vocês. Cada um toca no seu botão, fala, e espera a tradução sair em voz alta.
+      <br>
+      <button id="comecar">Começar</button>
+    </div>
+  </div>
+
+<script>
+const IDIOMAS = [
+  {cod:'en', bcp:'en-US', nome:'Inglês',   label:'inglês'},
+  {cod:'es', bcp:'es-ES', nome:'Espanhol', label:'espanhol'},
+  {cod:'ar', bcp:'ar-SA', nome:'Árabe',    label:'árabe'},
+  {cod:'hi', bcp:'hi-IN', nome:'Hindi',    label:'hindi'},
+  {cod:'fr', bcp:'fr-FR', nome:'Francês',  label:'francês'},
+  {cod:'zh', bcp:'zh-CN', nome:'Chinês',   label:'chinês'},
+  {cod:'ru', bcp:'ru-RU', nome:'Russo',    label:'russo'},
+];
+const PT = {cod:'pt', bcp:'pt-BR', nome:'Português', label:'português'};
+
+const sel = document.getElementById('idioma');
+IDIOMAS.forEach((l,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=l.nome; sel.appendChild(o); });
+
+let outro = IDIOMAS[0];
+function atualizaRotulos(){
+  document.getElementById('rotEle').textContent = 'Outra pessoa · ' + outro.nome;
+  document.getElementById('lblEle').textContent = 'Falar ' + outro.label;
+}
+sel.addEventListener('change', ()=>{ outro = IDIOMAS[sel.value]; atualizaRotulos(); });
+atualizaRotulos();
+
+document.getElementById('flip').addEventListener('change', e=>{
+  document.getElementById('cardEle').classList.toggle('flip', e.target.checked);
+});
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let ocupado = false;
+
+// desbloqueia a voz no primeiro toque (exigência do iOS)
+document.getElementById('comecar').addEventListener('click', ()=>{
+  try{ const u=new SpeechSynthesisUtterance(' '); speechSynthesis.speak(u); }catch(e){}
+  document.getElementById('aviso').style.display='none';
+  if(!SR){ alert('Este navegador não reconhece voz. Abra no Chrome (Android) ou Safari (iPhone).'); }
+});
+
+async function traduzir(texto, de, para){
+  const url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(texto) + '&langpair=' + de + '|' + para;
+  const r = await fetch(url);
+  const j = await r.json();
+  return (j.responseData && j.responseData.translatedText) || texto;
+}
+
+function falar(texto, bcp){
+  try{
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(texto);
+    u.lang = bcp;
+    const vs = speechSynthesis.getVoices();
+    const v = vs.find(x=>x.lang===bcp) || vs.find(x=>x.lang && x.lang.slice(0,2)===bcp.slice(0,2));
+    if(v) u.voice = v;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+function escutar(origem){
+  if(ocupado || !SR) return;
+  const eu = origem==='eu';
+  const falante = eu ? PT : outro;
+  const alvo    = eu ? outro : PT;
+  const idOrig  = eu ? 'origEu'   : 'origEle';
+  const idTrad  = eu ? 'tradEu'   : 'tradEle';
+  const idStat  = eu ? 'statusEu' : 'statusEle';
+  const btn     = document.getElementById(eu ? 'btnEu' : 'btnEle');
+
+  const rec = new SR();
+  rec.lang = falante.bcp;
+  rec.interimResults = true;
+  rec.maxAlternatives = 1;
+
+  ocupado = true;
+  btn.classList.add('gravando');
+  document.getElementById(idStat).textContent = 'Ouvindo...';
+  document.getElementById(idOrig).textContent = '';
+  document.getElementById(idTrad).textContent = '...';
+
+  let finalTxt = '';
+  rec.onresult = (e)=>{
+    let interim='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const t=e.results[i][0].transcript;
+      if(e.results[i].isFinal) finalTxt+=t; else interim+=t;
+    }
+    document.getElementById(idOrig).textContent = finalTxt || interim;
+  };
+  rec.onerror = (e)=>{ document.getElementById(idStat).textContent = 'Erro: '+e.error; };
+  rec.onend = async ()=>{
+    btn.classList.remove('gravando');
+    ocupado = false;
+    const texto = finalTxt.trim();
+    if(!texto){ document.getElementById(idStat).textContent=''; document.getElementById(idTrad).textContent='Não entendi, tente de novo.'; return; }
+    document.getElementById(idStat).textContent = 'Traduzindo...';
+    try{
+      const t = await traduzir(texto, falante.cod, alvo.cod);
+      document.getElementById(idTrad).textContent = t;
+      document.getElementById(idStat).textContent = '';
+      falar(t, alvo.bcp);
+    }catch(err){
+      document.getElementById(idStat).textContent = 'Falha na tradução (sinal?).';
+    }
+  };
+  try{ rec.start(); }catch(e){ ocupado=false; btn.classList.remove('gravando'); }
+}
+
+document.getElementById('btnEu').addEventListener('click', ()=>escutar('eu'));
+document.getElementById('btnEle').addEventListener('click', ()=>escutar('ele'));
+if('speechSynthesis' in window){ speechSynthesis.onvoiceschanged = ()=>{}; }
+</script>
+</body>
+</html>
