@@ -2,199 +2,462 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Tradutor por Voz · Zebubit</title>
+<meta name="description" content="Conversa traduzida em tempo real entre dois idiomas. Deixe o celular na mesa, cada um fala na sua língua e ouve a tradução em voz alta.">
+<meta name="theme-color" content="#070A12">
+<meta property="og:title" content="Tradutor por Voz · Zebubit">
+<meta property="og:description" content="Duas pessoas, dois idiomas, um celular na mesa. Tradução por voz em tempo real.">
+<meta property="og:image" content="https://zebubit.github.io/tradutor-voz/capa.png">
+<meta property="og:type" content="website">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icone-192.png">
+<link rel="apple-touch-icon" href="icone-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tradutor">
 <style>
   :root{
-    --eu:#1D5FD1; --eu-c:#EEF4FF;
-    --ele:#0E7C66; --ele-c:#E9F7F2;
-    --ink:#14171C; --mut:#5A6170; --linha:#E3E7EE; --bg:#0b1220;
+    --bg:#070A12; --sup:#0E1320; --sup2:#141B2C; --linha:#222C42;
+    --txt:#F2F5FA; --mut:#97A3BB;
+    --a:#EDBB4A; --a-t:#1A1405;
+    --b:#3FD6E8; --b-t:#04181C;
   }
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{height:100%}
-  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:var(--bg);color:#fff;display:flex;flex-direction:column;overflow:hidden}
-  .top{padding:10px 14px;display:flex;align-items:center;gap:10px;background:#0b1220;border-bottom:1px solid #1c2740}
-  .top b{font-size:15px;letter-spacing:.02em}
-  .top select{margin-left:auto;background:#17203a;color:#fff;border:1px solid #2a3858;border-radius:10px;padding:8px 10px;font-size:15px}
-  .cards{flex:1;display:flex;flex-direction:column;min-height:0}
-  .card{flex:1;display:flex;flex-direction:column;justify-content:center;padding:18px 18px;min-height:0;position:relative;overflow:hidden}
-  .card.ele{background:var(--ele-c);color:var(--ink)}
-  .card.eu{background:var(--eu-c);color:var(--ink)}
-  .card.flip{transform:rotate(180deg)}
-  .rot{font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;opacity:.7;margin-bottom:8px}
-  .card.ele .rot{color:var(--ele)}
-  .card.eu .rot{color:var(--eu)}
-  .orig{font-size:16px;opacity:.6;margin-bottom:8px;min-height:20px}
-  .trad{font-size:30px;font-weight:700;line-height:1.15}
-  .status{font-size:13px;opacity:.55;margin-top:10px;min-height:16px}
-  .btns{display:flex;gap:1px;background:#1c2740}
-  .btn{flex:1;border:0;color:#fff;padding:20px 8px 26px;font-size:17px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;transition:filter .1s}
-  .btn:active{filter:brightness(1.2)}
-  .btn.ele{background:var(--ele)}
-  .btn.eu{background:var(--eu)}
-  .btn .mic{width:26px;height:26px}
-  .btn.gravando{animation:pulse .9s infinite}
-  @keyframes pulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.4)}}
-  .barra-cfg{display:flex;align-items:center;gap:8px;padding:6px 14px;background:#0b1220;border-top:1px solid #1c2740;font-size:13px;color:#8a97b0}
-  .barra-cfg label{display:flex;align-items:center;gap:6px}
-  .aviso{position:fixed;inset:0;background:#0b1220;display:flex;align-items:center;justify-content:center;padding:30px;text-align:center;font-size:16px;line-height:1.5;z-index:9}
-  .aviso div{max-width:300px}
-  .aviso button{margin-top:18px;background:var(--eu);color:#fff;border:0;border-radius:12px;padding:14px 22px;font-size:17px;font-weight:700}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background:var(--bg);color:var(--txt);overflow:hidden;touch-action:manipulation}
+  button,select,input{font:inherit;color:inherit}
+  button{cursor:pointer;border:0;background:none}
+  :focus-visible{outline:2px solid #fff;outline-offset:2px}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+  .app{height:100vh;height:100dvh;display:flex;flex-direction:column;
+    background:
+      radial-gradient(120% 60% at 50% 0%,rgba(63,214,232,.10),transparent 60%),
+      radial-gradient(120% 60% at 50% 100%,rgba(237,187,74,.10),transparent 60%),
+      var(--bg)}
+
+  /* painel de cada pessoa */
+  .painel{flex:1;min-height:0;display:flex;flex-direction:column;padding:10px 16px;position:relative;transition:transform .35s ease}
+  #p-b{--c:var(--b);--ct:var(--b-t);padding-top:max(10px,env(safe-area-inset-top))}
+  #p-a{--c:var(--a);--ct:var(--a-t);padding-bottom:max(10px,env(safe-area-inset-bottom))}
+  .mesa #p-b{transform:rotate(180deg);padding-top:10px;padding-bottom:max(10px,env(safe-area-inset-top))}
+
+  .cab{display:flex;align-items:center;gap:6px}
+  .lang{position:relative;display:inline-flex;align-items:center}
+  .lang select{appearance:none;-webkit-appearance:none;background:var(--sup2);border:1px solid var(--linha);border-radius:999px;padding:0 34px 0 14px;height:44px;font-size:16px;font-weight:600;color:var(--c)}
+  .lang::after{content:"";position:absolute;right:14px;top:50%;width:7px;height:7px;border-right:2px solid var(--c);border-bottom:2px solid var(--c);transform:translateY(-70%) rotate(45deg);pointer-events:none}
+  .tag{margin-left:auto;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);min-height:14px}
+  .ico{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;color:var(--mut);transition:background .15s,color .15s}
+  .ico:active{background:var(--sup2);color:var(--txt)}
+  .ico svg{width:22px;height:22px}
+
+  .txt{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;justify-content:center;gap:8px;padding:6px 2px}
+  .ant{font-size:15px;line-height:1.4;color:var(--mut);opacity:.75}
+  .atual{font-size:clamp(22px,6.4vw,34px);font-weight:700;line-height:1.2;letter-spacing:-.01em;transition:opacity .2s}
+  .atual.longo{font-size:clamp(18px,4.8vw,24px);line-height:1.3}
+  .atual.dica{color:var(--mut);font-weight:500;opacity:.6}
+  .atual.vivo{opacity:.55}
+
+  .digita{display:flex;gap:8px;margin-bottom:8px}
+  .digita[hidden]{display:none}
+  .digita input{flex:1;min-width:0;height:48px;border-radius:14px;border:1px solid var(--linha);background:var(--sup);padding:0 14px;font-size:16px}
+  .digita input:focus{outline:none;border-color:var(--c)}
+  .digita button{width:48px;height:48px;border-radius:14px;background:var(--c);color:var(--ct);display:grid;place-items:center}
+  .digita svg{width:22px;height:22px}
+
+  .base{display:flex;flex-direction:column;align-items:center;gap:6px}
+  .st{font-size:13px;color:var(--mut);min-height:17px;text-align:center}
+  .mic{width:76px;height:76px;border-radius:50%;background:var(--c);color:var(--ct);display:grid;place-items:center;position:relative;transition:transform .15s ease-out,box-shadow .2s;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 10px 30px -10px var(--c)}
+  .mic:active{transform:scale(.95)}
+  .mic svg{width:30px;height:30px}
+  .mic .eq{display:none;align-items:center;gap:4px;height:30px}
+  .mic .eq i{width:4px;border-radius:2px;background:var(--ct);height:8px;animation:eq .9s ease-in-out infinite}
+  .mic .eq i:nth-child(2){animation-delay:.15s}.mic .eq i:nth-child(3){animation-delay:.3s}
+  .mic .eq i:nth-child(4){animation-delay:.45s}.mic .eq i:nth-child(5){animation-delay:.6s}
+  @keyframes eq{0%,100%{height:8px}50%{height:28px}}
+  .mic::before,.mic::after{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid var(--c);opacity:0;pointer-events:none}
+
+  [data-e="ouvindo"] .mic svg{display:none}
+  [data-e="ouvindo"] .mic .eq{display:flex}
+  [data-e="ouvindo"] .mic::before{animation:onda 1.6s ease-out infinite}
+  [data-e="ouvindo"] .mic::after{animation:onda 1.6s ease-out .8s infinite}
+  @keyframes onda{0%{transform:scale(1);opacity:.7}100%{transform:scale(1.9);opacity:0}}
+  [data-e="traduzindo"] .mic::before{opacity:1;inset:-7px;border-color:var(--c) transparent transparent transparent;animation:gira .8s linear infinite}
+  @keyframes gira{to{transform:rotate(360deg)}}
+  [data-e="falando"] .atual{color:var(--c)}
+  [data-e="falando"] .ico.rep{color:var(--c)}
+  [data-e="espera"] .mic{opacity:.35}
+
+  /* barra central */
+  .centro{display:flex;align-items:stretch;justify-content:space-between;gap:2px;padding:4px 8px;background:var(--sup);border-block:1px solid var(--linha)}
+  .cbtn{flex:1;min-height:52px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px;font-weight:600;color:var(--mut);position:relative;transition:background .15s,color .15s}
+  .cbtn svg{width:21px;height:21px}
+  .cbtn:active{background:var(--sup2)}
+  .cbtn[aria-pressed="true"]{color:var(--a);background:rgba(237,187,74,.10)}
+  .cbtn .n{position:absolute;top:5px;left:calc(50% + 6px);min-width:17px;height:17px;border-radius:9px;background:var(--b);color:var(--b-t);font-size:11px;line-height:17px;padding:0 4px}
+  .cbtn .n:empty{display:none}
+
+  /* folhas (início e histórico) */
+  .folha{position:fixed;inset:0;z-index:20;background:rgba(4,6,12,.86);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);display:flex;align-items:flex-end;justify-content:center}
+  .folha[hidden]{display:none}
+  .caixa{width:100%;max-width:520px;max-height:88dvh;display:flex;flex-direction:column;background:var(--sup);border:1px solid var(--linha);border-bottom:0;border-radius:22px 22px 0 0;padding:22px 20px max(20px,env(safe-area-inset-bottom));animation:sobe .28s ease-out}
+  @keyframes sobe{from{transform:translateY(30px);opacity:0}}
+  .caixa h1{font-size:24px;letter-spacing:-.02em;line-height:1.15}
+  .caixa h1 span{color:var(--a)}
+  .caixa h2{font-size:18px}
+  .caixa p{color:var(--mut);font-size:15px;line-height:1.5;margin-top:8px}
+  .passos{list-style:none;margin:18px 0 6px;display:grid;gap:12px}
+  .passos li{display:flex;gap:12px;align-items:flex-start;font-size:15px;line-height:1.4}
+  .passos b{flex:none;width:26px;height:26px;border-radius:50%;background:var(--sup2);border:1px solid var(--linha);color:var(--a);font-size:13px;display:grid;place-items:center}
+  .aviso{margin-top:14px;padding:12px 14px;border-radius:12px;background:rgba(237,187,74,.10);border:1px solid rgba(237,187,74,.35);color:var(--txt);font-size:14px;line-height:1.45}
+  .aviso[hidden]{display:none}
+  .pri{margin-top:18px;height:54px;border-radius:16px;background:var(--a);color:var(--a-t);font-size:17px;font-weight:700;width:100%}
+  .pri:active{transform:scale(.98)}
+  .ass{margin-top:14px;text-align:center;font-size:12px;color:var(--mut)}
+  .topo{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .topo h2{flex:1}
+  .lista{flex:1;overflow-y:auto;display:grid;gap:10px;align-content:start;min-height:120px}
+  .item{text-align:left;width:100%;padding:12px 14px;border-radius:14px;background:var(--sup2);border:1px solid var(--linha);border-left:3px solid var(--c)}
+  .item small{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin-bottom:4px}
+  .item em{display:block;font-style:normal;font-size:14px;color:var(--mut);line-height:1.35}
+  .item strong{display:block;font-size:16px;line-height:1.35;margin-top:4px}
+  .vazio{color:var(--mut);font-size:15px;text-align:center;padding:30px 10px}
+  .linha2{display:flex;gap:10px;margin-top:14px}
+  .sec{flex:1;height:48px;border-radius:14px;border:1px solid var(--linha);background:var(--sup2);font-weight:600;font-size:15px}
+  .sec.ouro{border-color:var(--a);color:var(--a)}
+
+  @media (min-width:700px){
+    .app{max-width:520px;margin:0 auto;border-inline:1px solid var(--linha)}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+  }
 </style>
 </head>
 <body>
-  <div class="top">
-    <b>Tradutor por Voz</b>
-    <select id="idioma" aria-label="Idioma da outra pessoa"></select>
-  </div>
+<main class="app" id="app">
+  <div id="slot-b"></div>
+  <nav class="centro" aria-label="Controles">
+    <button class="cbtn" id="b-troca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M7 20l-4-4M7 20l4-4M17 20V4M17 4l-4 4M17 4l4 4"/></svg>Trocar</button>
+    <button class="cbtn" id="b-auto" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-12.5 6.6L3 20l1.4-4.6A8 8 0 1 1 21 12z"/><path d="M9 11v2M12 9v6M15 11v2"/></svg>Conversa</button>
+    <button class="cbtn" id="b-mesa" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="12" height="18" rx="2.5"/><path d="M10 7.5h4M10 16.5h4"/></svg>Mesa</button>
+    <button class="cbtn" id="b-voz"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/></svg><span id="voz-l">Voz</span></button>
+    <button class="cbtn" id="b-hist"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Histórico<span class="n" id="hist-n"></span></button>
+  </nav>
+  <div id="slot-a"></div>
+</main>
 
-  <div class="cards">
-    <div class="card ele" id="cardEle">
-      <div class="rot" id="rotEle">Outra pessoa</div>
-      <div class="orig" id="origEle"></div>
-      <div class="trad" id="tradEle">Toque no botão verde e fale.</div>
-      <div class="status" id="statusEle"></div>
+<div class="folha" id="inicio" role="dialog" aria-modal="true" aria-labelledby="ini-t">
+  <div class="caixa">
+    <h1 id="ini-t">Dois idiomas.<br><span>Um celular na mesa.</span></h1>
+    <p>Cada pessoa fala na sua língua e a outra lê e ouve a tradução na hora.</p>
+    <ol class="passos">
+      <li><b>1</b><span>Escolha os dois idiomas, um em cada metade da tela.</span></li>
+      <li><b>2</b><span>Toque no seu microfone e fale. Toque de novo se quiser encerrar antes.</span></li>
+      <li><b>3</b><span>Ligue <strong>Conversa</strong> para o microfone alternar sozinho entre vocês.</span></li>
+    </ol>
+    <div class="aviso" id="sem-voz" hidden>Este navegador não reconhece voz. Abra no Chrome (Android) ou no Safari (iPhone) para falar. Aqui você ainda pode digitar e ouvir a tradução.</div>
+    <button class="pri" id="comecar">Começar</button>
+    <div class="ass">Zebubit · criado por Dione Folador</div>
+  </div>
+</div>
+
+<div class="folha" id="hist" role="dialog" aria-modal="true" aria-labelledby="hist-t" hidden>
+  <div class="caixa">
+    <div class="topo">
+      <h2 id="hist-t">Conversa</h2>
+      <button class="ico" id="hist-x" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
-    <div class="card eu" id="cardEu">
-      <div class="rot">Você · Português</div>
-      <div class="orig" id="origEu"></div>
-      <div class="trad" id="tradEu">Toque no botão azul e fale.</div>
-      <div class="status" id="statusEu"></div>
-    </div>
-  </div>
-
-  <div class="btns">
-    <button class="btn ele" id="btnEle">
-      <svg class="mic" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
-      <span id="lblEle">Falar inglês</span>
-    </button>
-    <button class="btn eu" id="btnEu">
-      <svg class="mic" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
-      <span>Falar português</span>
-    </button>
-  </div>
-
-  <div class="barra-cfg">
-    <label><input type="checkbox" id="flip"> Virar o texto da outra pessoa (modo mesa)</label>
-  </div>
-
-  <div class="aviso" id="aviso">
-    <div>
-      Toque para começar.<br><br>
-      Deixe o celular na mesa entre vocês. Cada um toca no seu botão, fala, e espera a tradução sair em voz alta.
-      <br>
-      <button id="comecar">Começar</button>
+    <div class="lista" id="lista"></div>
+    <div class="linha2">
+      <button class="sec" id="hist-limpa">Limpar</button>
+      <button class="sec ouro" id="hist-envia">Compartilhar</button>
     </div>
   </div>
+</div>
 
 <script>
 const IDIOMAS = [
-  {cod:'en', bcp:'en-US', nome:'Inglês',   label:'inglês'},
-  {cod:'es', bcp:'es-ES', nome:'Espanhol', label:'espanhol'},
-  {cod:'ar', bcp:'ar-SA', nome:'Árabe',    label:'árabe'},
-  {cod:'hi', bcp:'hi-IN', nome:'Hindi',    label:'hindi'},
-  {cod:'fr', bcp:'fr-FR', nome:'Francês',  label:'francês'},
-  {cod:'zh', bcp:'zh-CN', nome:'Chinês',   label:'chinês'},
-  {cod:'ru', bcp:'ru-RU', nome:'Russo',    label:'russo'},
+  {cod:'pt',    bcp:'pt-BR', nome:'Português', s:['Toque e fale','Ouvindo…','Traduzindo…','Não entendi. Tente de novo.','Digite aqui','Você disse','Tradução']},
+  {cod:'en',    bcp:'en-US', nome:'English',   s:['Tap and speak','Listening…','Translating…',"Didn't catch that. Try again.",'Type here','You said','Translation']},
+  {cod:'es',    bcp:'es-ES', nome:'Español',   s:['Toca y habla','Escuchando…','Traduciendo…','No entendí. Inténtalo de nuevo.','Escribe aquí','Dijiste','Traducción']},
+  {cod:'fr',    bcp:'fr-FR', nome:'Français',  s:['Touchez et parlez','Écoute…','Traduction…',"Je n'ai pas compris. Réessayez.",'Écrivez ici','Vous avez dit','Traduction']},
+  {cod:'de',    bcp:'de-DE', nome:'Deutsch',   s:['Tippen und sprechen','Ich höre zu…','Übersetze…','Nicht verstanden. Bitte noch einmal.','Hier schreiben','Sie sagten','Übersetzung']},
+  {cod:'it',    bcp:'it-IT', nome:'Italiano',  s:['Tocca e parla','Ascolto…','Traduco…','Non ho capito. Riprova.','Scrivi qui','Hai detto','Traduzione']},
+  {cod:'ar',    bcp:'ar-SA', nome:'العربية',   s:['اضغط وتحدث','جارٍ الاستماع…','جارٍ الترجمة…','لم أفهم. حاول مرة أخرى.','اكتب هنا','قلتَ','الترجمة'], rtl:1},
+  {cod:'hi',    bcp:'hi-IN', nome:'हिन्दी',     s:['टैप करें और बोलें','सुन रहा हूँ…','अनुवाद हो रहा है…','समझ नहीं आया। फिर से कोशिश करें।','यहाँ लिखें','आपने कहा','अनुवाद']},
+  {cod:'zh-CN', bcp:'zh-CN', nome:'中文',       s:['点击并说话','正在聆听…','正在翻译…','没听清，请再试一次。','在此输入','你说','翻译']},
+  {cod:'ja',    bcp:'ja-JP', nome:'日本語',     s:['タップして話す','聞いています…','翻訳中…','聞き取れませんでした。もう一度どうぞ。','ここに入力','あなたの発言','翻訳']},
+  {cod:'ko',    bcp:'ko-KR', nome:'한국어',     s:['탭하고 말하세요','듣는 중…','번역 중…','잘 못 들었어요. 다시 시도하세요.','여기에 입력','내가 한 말','번역']},
+  {cod:'ru',    bcp:'ru-RU', nome:'Русский',   s:['Нажмите и говорите','Слушаю…','Перевожу…','Не расслышал. Попробуйте ещё раз.','Введите текст','Вы сказали','Перевод']},
+  {cod:'tr',    bcp:'tr-TR', nome:'Türkçe',    s:['Dokun ve konuş','Dinliyorum…','Çevriliyor…','Anlayamadım. Tekrar deneyin.','Buraya yazın','Söylediğiniz','Çeviri']},
 ];
-const PT = {cod:'pt', bcp:'pt-BR', nome:'Português', label:'português'};
+const S = {toque:0, ouvindo:1, traduzindo:2, nada:3, digite:4, disse:5, trad:6};
+const IC = {
+  mic:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
+  som:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6"/></svg>',
+  tec:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h.01M10 10h.01M13.5 10h.01M17 10h.01M8 14h8"/></svg>',
+  env:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+};
+const $ = id => document.getElementById(id);
+const guarda = { ler(k,p){ try{ const v=localStorage.getItem('tv.'+k); return v===null?p:v }catch(e){ return p } }, por(k,v){ try{ localStorage.setItem('tv.'+k,v) }catch(e){} } };
 
-const sel = document.getElementById('idioma');
-IDIOMAS.forEach((l,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=l.nome; sel.appendChild(o); });
-
-let outro = IDIOMAS[0];
-function atualizaRotulos(){
-  document.getElementById('rotEle').textContent = 'Outra pessoa · ' + outro.nome;
-  document.getElementById('lblEle').textContent = 'Falar ' + outro.label;
-}
-sel.addEventListener('change', ()=>{ outro = IDIOMAS[sel.value]; atualizaRotulos(); });
-atualizaRotulos();
-
-document.getElementById('flip').addEventListener('change', e=>{
-  document.getElementById('cardEle').classList.toggle('flip', e.target.checked);
+// monta as duas metades (a = quem segura o celular, b = a outra pessoa)
+['a','b'].forEach(k=>{
+  $('slot-'+k).outerHTML = `
+  <section class="painel" id="p-${k}" data-e="livre">
+    <div class="cab">
+      <label class="lang"><span class="sr">Idioma</span><select id="sel-${k}"></select></label>
+      <span class="tag" id="tag-${k}"></span>
+      <button class="ico rep" id="rep-${k}" aria-label="Ouvir de novo">${IC.som}</button>
+      <button class="ico" id="kb-${k}" aria-label="Digitar">${IC.tec}</button>
+    </div>
+    <div class="txt" id="txt-${k}" aria-live="polite"><p class="ant" id="ant-${k}"></p><p class="atual dica" id="at-${k}"></p></div>
+    <form class="digita" id="frm-${k}" hidden><input id="inp-${k}" enterkeyhint="send" autocomplete="off" autocapitalize="sentences"><button aria-label="Traduzir">${IC.env}</button></form>
+    <div class="base"><span class="st" id="st-${k}"></span><button class="mic" id="mic-${k}"><span class="eq"><i></i><i></i><i></i><i></i><i></i></span>${IC.mic}</button></div>
+  </section>`;
+  IDIOMAS.forEach((l,i)=>$('sel-'+k).add(new Option(l.nome,i)));
 });
+
+const P = {
+  a:{lang:IDIOMAS[+guarda.ler('a',0)]||IDIOMAS[0], ultimo:''},
+  b:{lang:IDIOMAS[+guarda.ler('b',1)]||IDIOMAS[1], ultimo:''},
+};
+const outro = k => k==='a'?'b':'a';
+const frase = (k,i) => P[k].lang.s[i];
+
+function estado(k,e){ $('p-'+k).dataset.e = e; }
+function status(k,t){ $('st-'+k).textContent = t||''; }
+function mostra(k,texto,tipo,vivo){
+  const el = $('at-'+k);
+  el.textContent = texto;
+  el.className = 'atual' + (vivo?' vivo':'') + (texto.length>110?' longo':'');
+  $('tag-'+k).textContent = tipo===undefined ? '' : frase(k,tipo);
+  $('txt-'+k).scrollTop = 1e6;
+}
+function dica(k){
+  const el = $('at-'+k);
+  el.textContent = SR ? frase(k,S.toque) : frase(k,S.digite);
+  el.className = 'atual dica';
+  $('tag-'+k).textContent = '';
+}
+function aplicaIdioma(k){
+  const l = P[k].lang;
+  $('sel-'+k).value = IDIOMAS.indexOf(l);
+  $('txt-'+k).dir = l.rtl ? 'rtl' : 'ltr';
+  $('inp-'+k).dir = l.rtl ? 'rtl' : 'ltr';
+  $('inp-'+k).placeholder = frase(k,S.digite);
+  $('inp-'+k).lang = l.bcp;
+  $('mic-'+k).setAttribute('aria-label', frase(k,S.toque));
+  $('ant-'+k).textContent = ''; P[k].ultimo = '';
+  status(k,''); dica(k);
+  guarda.por(k, IDIOMAS.indexOf(l));
+}
 
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let ocupado = false;
+let rec = null, quem = null, ocupado = false, seq = 0, pend = '', vivoOn = false;
+let auto = guarda.ler('auto','0')==='1';
+let voz = +guarda.ler('voz',0);            // 0 normal, 1 lenta, 2 sem voz
+const VOZ = ['Voz','Lenta','Sem voz'];
+const hist = [];
 
-// desbloqueia a voz no primeiro toque (exigência do iOS)
-document.getElementById('comecar').addEventListener('click', ()=>{
-  try{ const u=new SpeechSynthesisUtterance(' '); speechSynthesis.speak(u); }catch(e){}
-  document.getElementById('aviso').style.display='none';
-  if(!SR){ alert('Este navegador não reconhece voz. Abra no Chrome (Android) ou Safari (iPhone).'); }
-});
-
-async function traduzir(texto, de, para){
-  const url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(texto) + '&langpair=' + de + '|' + para;
-  const r = await fetch(url);
+// ---------- tradução ----------
+async function traduz(texto, de, para){
+  if(de.cod===para.cod) return texto;
+  const r = await fetch('https://api.mymemory.translated.net/get?q='+encodeURIComponent(texto)+'&langpair='+de.cod+'|'+para.cod);
   const j = await r.json();
-  return (j.responseData && j.responseData.translatedText) || texto;
+  if(j.quotaFinished || +j.responseStatus===429) throw new Error('limite');
+  const t = j.responseData && j.responseData.translatedText;
+  if(!t || +j.responseStatus!==200) throw new Error('falha');
+  return t;
 }
 
-function falar(texto, bcp){
+// ---------- voz ----------
+function melhorVoz(bcp){
+  const vs = speechSynthesis.getVoices().filter(v=>v.lang && v.lang.replace('_','-').slice(0,2)===bcp.slice(0,2));
+  const nota = v => (v.lang.replace('_','-')===bcp?4:0) + (/natural|premium|enhanced|neural|siri/i.test(v.name)?3:0) + (/google/i.test(v.name)?2:0) + (v.localService?0:1);
+  return vs.sort((x,y)=>nota(y)-nota(x))[0];
+}
+function falar(texto, k, fim){
+  fim = fim || (()=>{});
+  if(voz===2 || !('speechSynthesis' in window) || !texto){ fim(); return; }
+  let feito = false, tm;
+  const acabou = ()=>{ if(feito) return; feito = true; clearTimeout(tm); if($('p-'+k).dataset.e==='falando') estado(k,'livre'); fim(); };
   try{
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(texto);
-    u.lang = bcp;
-    const vs = speechSynthesis.getVoices();
-    const v = vs.find(x=>x.lang===bcp) || vs.find(x=>x.lang && x.lang.slice(0,2)===bcp.slice(0,2));
-    if(v) u.voice = v;
+    const taxa = voz===1 ? .75 : 1;
+    u.lang = P[k].lang.bcp; u.rate = taxa;
+    const v = melhorVoz(u.lang); if(v) u.voice = v;
+    u.onend = u.onerror = acabou;
+    tm = setTimeout(acabou, 2000 + texto.length*95/taxa);   // alguns celulares não avisam o fim
+    estado(k,'falando');
     speechSynthesis.speak(u);
-  }catch(e){}
+  }catch(e){ acabou(); }
 }
 
-function escutar(origem){
-  if(ocupado || !SR) return;
-  const eu = origem==='eu';
-  const falante = eu ? PT : outro;
-  const alvo    = eu ? outro : PT;
-  const idOrig  = eu ? 'origEu'   : 'origEle';
-  const idTrad  = eu ? 'tradEu'   : 'tradEle';
-  const idStat  = eu ? 'statusEu' : 'statusEle';
-  const btn     = document.getElementById(eu ? 'btnEu' : 'btnEle');
-
-  const rec = new SR();
-  rec.lang = falante.bcp;
-  rec.interimResults = true;
-  rec.maxAlternatives = 1;
-
-  ocupado = true;
-  btn.classList.add('gravando');
-  document.getElementById(idStat).textContent = 'Ouvindo...';
-  document.getElementById(idOrig).textContent = '';
-  document.getElementById(idTrad).textContent = '...';
-
-  let finalTxt = '';
-  rec.onresult = (e)=>{
-    let interim='';
+// ---------- uma fala ----------
+function comeca(k){
+  const o = outro(k);
+  [k,o].forEach(x=>{ if(P[x].ultimo) $('ant-'+x).textContent = P[x].ultimo; status(x,''); });
+  mostra(k,'',S.disse); mostra(o,'',S.trad);
+}
+// prévia da tradução enquanto a pessoa ainda fala: uma chamada por vez, sempre com o texto mais recente
+async function aoVivo(k, texto){
+  pend = texto;
+  if(vivoOn || texto.length<8) return;
+  vivoOn = true;
+  const n = seq;
+  while(pend && n===seq){
+    const t0 = pend; pend = '';
+    try{ const t = await traduz(t0, P[k].lang, P[outro(k)].lang); if(n===seq) mostra(outro(k), t, S.trad, true); }catch(e){}
+    await new Promise(r=>setTimeout(r,900));
+  }
+  vivoOn = false;
+}
+async function conclui(k, texto){
+  const o = outro(k);
+  pend = ''; const n = ++seq;
+  if(!texto){
+    ocupado = false; estado(k,'livre'); estado(o,'livre');
+    status(k, frase(k,S.nada));
+    if(P[k].ultimo) mostra(k,P[k].ultimo); else dica(k);
+    if(P[o].ultimo) mostra(o,P[o].ultimo); else dica(o);
+    return;
+  }
+  mostra(k, texto, S.disse);
+  estado(k,'traduzindo'); status(o, frase(o,S.traduzindo));
+  try{
+    const t = await traduz(texto, P[k].lang, P[o].lang);
+    if(n!==seq) return;
+    P[k].ultimo = texto; P[o].ultimo = t;
+    mostra(o, t, S.trad); status(o,''); estado(k,'livre');
+    hist.push({h:new Date(), k, de:P[k].lang, para:P[o].lang, orig:texto, trad:t});
+    $('hist-n').textContent = hist.length;
+    if(navigator.vibrate) navigator.vibrate(18);
+    falar(t, o, ()=>{ ocupado = false; estado(o,'livre'); if(auto && SR) escuta(o); });
+  }catch(err){
+    ocupado = false; estado(k,'livre'); estado(o,'livre'); status(o,'');
+    status(k, err.message==='limite' ? 'Limite diário de tradução atingido neste aparelho.' : 'Sem conexão para traduzir. Tente de novo.');
+  }
+}
+function escuta(k){
+  if(ocupado){ if(rec && quem===k){ try{ rec.stop() }catch(e){} } return; }
+  if(!SR){ abreTeclado(k); return; }
+  try{ speechSynthesis.cancel() }catch(e){}
+  const o = outro(k);
+  rec = new SR(); quem = k; ocupado = true;
+  rec.lang = P[k].lang.bcp; rec.interimResults = true; rec.maxAlternatives = 1;
+  let fin = '', tudo = '', erro = '';
+  comeca(k); estado(k,'ouvindo'); estado(o,'espera'); status(k, frase(k,S.ouvindo));
+  rec.onresult = e=>{
+    let parcial = '';
     for(let i=e.resultIndex;i<e.results.length;i++){
-      const t=e.results[i][0].transcript;
-      if(e.results[i].isFinal) finalTxt+=t; else interim+=t;
+      const t = e.results[i][0].transcript;
+      if(e.results[i].isFinal) fin += t; else parcial += t;
     }
-    document.getElementById(idOrig).textContent = finalTxt || interim;
+    tudo = (fin+parcial).trim();
+    mostra(k, tudo, S.disse, true);
+    aoVivo(k, tudo);
   };
-  rec.onerror = (e)=>{ document.getElementById(idStat).textContent = 'Erro: '+e.error; };
-  rec.onend = async ()=>{
-    btn.classList.remove('gravando');
-    ocupado = false;
-    const texto = finalTxt.trim();
-    if(!texto){ document.getElementById(idStat).textContent=''; document.getElementById(idTrad).textContent='Não entendi, tente de novo.'; return; }
-    document.getElementById(idStat).textContent = 'Traduzindo...';
-    try{
-      const t = await traduzir(texto, falante.cod, alvo.cod);
-      document.getElementById(idTrad).textContent = t;
-      document.getElementById(idStat).textContent = '';
-      falar(t, alvo.bcp);
-    }catch(err){
-      document.getElementById(idStat).textContent = 'Falha na tradução (sinal?).';
+  rec.onerror = e=>{ erro = e.error; };
+  rec.onend = ()=>{
+    rec = null; estado(o,'livre'); status(k,'');
+    if(erro==='not-allowed' || erro==='service-not-allowed'){
+      ocupado = false; estado(k,'livre'); dica(k); dica(o);
+      status(k,'Libere o microfone nas permissões do navegador.');
+      return;
     }
+    conclui(k, (fin.trim() || tudo));
   };
-  try{ rec.start(); }catch(e){ ocupado=false; btn.classList.remove('gravando'); }
+  try{ rec.start(); }catch(e){ rec = null; ocupado = false; estado(k,'livre'); estado(o,'livre'); status(k,''); dica(k); }
 }
 
-document.getElementById('btnEu').addEventListener('click', ()=>escutar('eu'));
-document.getElementById('btnEle').addEventListener('click', ()=>escutar('ele'));
-if('speechSynthesis' in window){ speechSynthesis.onvoiceschanged = ()=>{}; }
+// ---------- digitar ----------
+function abreTeclado(k){
+  const f = $('frm-'+k); f.hidden = !f.hidden;
+  if(!f.hidden) $('inp-'+k).focus();
+}
+['a','b'].forEach(k=>{
+  $('mic-'+k).addEventListener('click', ()=>escuta(k));
+  $('kb-'+k).addEventListener('click', ()=>abreTeclado(k));
+  $('rep-'+k).addEventListener('click', ()=>{ if(!ocupado && P[k].ultimo) falar(P[k].ultimo, k); });
+  $('sel-'+k).addEventListener('change', e=>{ if(ocupado){ e.target.value = IDIOMAS.indexOf(P[k].lang); return; } P[k].lang = IDIOMAS[e.target.value]; aplicaIdioma(k); });
+  $('frm-'+k).addEventListener('submit', e=>{
+    e.preventDefault();
+    const t = $('inp-'+k).value.trim();
+    if(!t || ocupado) return;
+    $('inp-'+k).value = ''; $('inp-'+k).blur();
+    ocupado = true; comeca(k); conclui(k, t);
+  });
+  aplicaIdioma(k);
+});
+
+// ---------- barra central ----------
+function pinta(){
+  $('b-auto').setAttribute('aria-pressed', auto);
+  $('voz-l').textContent = VOZ[voz];
+  $('b-voz').setAttribute('aria-label', 'Voz da tradução: '+VOZ[voz]);
+}
+$('b-troca').addEventListener('click', ()=>{
+  if(ocupado) return;
+  [P.a.lang, P.b.lang] = [P.b.lang, P.a.lang];
+  aplicaIdioma('a'); aplicaIdioma('b');
+});
+$('b-auto').addEventListener('click', ()=>{ auto = !auto; guarda.por('auto', auto?1:0); pinta(); });
+$('b-voz').addEventListener('click', ()=>{ voz = (voz+1)%3; guarda.por('voz', voz); if(voz===2){ try{ speechSynthesis.cancel() }catch(e){} } pinta(); });
+function mesa(lig){ $('app').classList.toggle('mesa', lig); $('b-mesa').setAttribute('aria-pressed', lig); guarda.por('mesa', lig?1:0); }
+$('b-mesa').addEventListener('click', ()=>mesa(!$('app').classList.contains('mesa')));
+mesa(guarda.ler('mesa','1')==='1');
+pinta();
+
+// ---------- histórico ----------
+const hora = d => d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+function desenhaHist(){
+  const L = $('lista'); L.textContent = '';
+  if(!hist.length){ const v = document.createElement('div'); v.className='vazio'; v.textContent='A conversa aparece aqui conforme vocês falam.'; L.appendChild(v); return; }
+  hist.forEach(x=>{
+    const b = document.createElement('button'); b.className = 'item'; b.style.setProperty('--c', x.k==='a'?'var(--a)':'var(--b)');
+    const s = document.createElement('small'); s.textContent = hora(x.h)+' · '+x.de.nome+' → '+x.para.nome;
+    const e = document.createElement('em'); e.textContent = x.orig; e.dir = x.de.rtl?'rtl':'ltr';
+    const t = document.createElement('strong'); t.textContent = x.trad; t.dir = x.para.rtl?'rtl':'ltr';
+    b.append(s,e,t);
+    b.addEventListener('click', ()=>{
+      if(voz===2 || ocupado) return;
+      try{ speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(x.trad); u.lang = x.para.bcp; u.rate = voz===1?.75:1; const v = melhorVoz(u.lang); if(v) u.voice = v; speechSynthesis.speak(u); }catch(err){}
+    });
+    L.appendChild(b);
+  });
+  L.scrollTop = 1e6;
+}
+$('b-hist').addEventListener('click', ()=>{ desenhaHist(); $('hist').hidden = false; });
+$('hist-x').addEventListener('click', ()=>{ $('hist').hidden = true; });
+$('hist').addEventListener('click', e=>{ if(e.target===$('hist')) $('hist').hidden = true; });
+$('hist-limpa').addEventListener('click', ()=>{ hist.length = 0; $('hist-n').textContent = ''; desenhaHist(); });
+$('hist-envia').addEventListener('click', async ()=>{
+  if(!hist.length) return;
+  const txt = 'Conversa traduzida · Tradutor por Voz Zebubit\n\n' + hist.map(x=>`${hora(x.h)} [${x.de.nome}] ${x.orig}\n      [${x.para.nome}] ${x.trad}`).join('\n\n');
+  const b = $('hist-envia');
+  try{
+    if(navigator.share) await navigator.share({text:txt});
+    else { await navigator.clipboard.writeText(txt); b.textContent = 'Copiado'; setTimeout(()=>b.textContent='Compartilhar', 1800); }
+  }catch(e){}
+});
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') $('hist').hidden = true; });
+
+// ---------- início ----------
+let trava = null;
+async function telaAcesa(){ try{ if('wakeLock' in navigator && document.visibilityState==='visible') trava = await navigator.wakeLock.request('screen'); }catch(e){} }
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && $('inicio').hidden) telaAcesa(); });
+if(!SR){ $('sem-voz').hidden = false; }
+$('comecar').addEventListener('click', ()=>{
+  try{ speechSynthesis.speak(new SpeechSynthesisUtterance(' ')); }catch(e){}   // libera a voz no iPhone
+  $('inicio').hidden = true;
+  telaAcesa();
+  if(!SR){ $('frm-a').hidden = false; $('frm-b').hidden = false; }
+});
+if('speechSynthesis' in window){ speechSynthesis.getVoices(); speechSynthesis.onvoiceschanged = ()=>{}; }
 </script>
 </body>
 </html>
