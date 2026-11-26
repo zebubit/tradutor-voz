@@ -364,8 +364,11 @@ function melhorVoz(bcp){
   return vs.sort((x,y)=>nota(y)-nota(x))[0];
 }
 const FALA = 'https://n8n.dionefolador.com/webhook/tradutor-voz-fala';
-const som = new Audio();
-function cala(){ try{ speechSynthesis.cancel(); }catch(e){} try{ som.pause(); }catch(e){} }
+// O áudio premium toca por AudioContext, liberado em qualquer toque na tela (o iPhone não toca áudio sem toque).
+let actx = null, fonte = null;
+function destrava(){ try{ actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if(actx.state!=='running') actx.resume(); }catch(e){} }
+['touchend','click'].forEach(ev=>document.addEventListener(ev, destrava, true));
+function cala(){ try{ speechSynthesis.cancel(); }catch(e){} try{ if(fonte) fonte.stop(); }catch(e){} }
 function falar(texto, k, fim){
   fim = fim || (()=>{});
   if(voz===2 || !texto){ fim(); return; }
@@ -374,7 +377,10 @@ function falar(texto, k, fim){
   else falaAparelho(texto, k, fim);
 }
 async function falaPremium(texto, k, fim){
+  const espera = (p, ms)=>Promise.race([p, new Promise((_,no)=>setTimeout(()=>no(new Error('demora')), ms))]);
+  let tocando = false;
   try{
+    if(!actx) throw 0;
     const corta = new AbortController(); const tc = setTimeout(()=>corta.abort(), 7000);
     const r = await fetch(FALA, {method:'POST', headers:{'Content-Type':'application/json'}, signal:corta.signal,
       body:JSON.stringify({codigo:cod, voz:timbre, lang:P[k].lang.cod, texto})});
@@ -382,15 +388,21 @@ async function falaPremium(texto, k, fim){
     const j = await r.json();
     if(r.status===401){ cod = ''; timbre = 'ap'; guarda.por('cod',''); pinta(); }
     if(!j.audio) throw 0;
+    const bin = atob(j.audio), bytes = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+    const buf = await espera(new Promise((ok,no)=>actx.decodeAudioData(bytes.buffer, ok, no)), 3000);
+    if(actx.state!=='running'){ try{ await espera(actx.resume(), 600); }catch(e){} }
+    if(actx.state!=='running') throw 0;
+    const taxa = voz===1 ? .8 : 1;
     let feito = false, tm;
-    const acabou = ()=>{ if(feito) return; feito = true; clearTimeout(tm); som.onended = som.onerror = null; if($('p-'+k).dataset.e==='falando') estado(k,'livre'); fim(); };
-    som.onended = acabou; som.onerror = ()=>{ if(!feito){ feito = true; clearTimeout(tm); falaAparelho(texto, k, fim); } };
-    som.src = 'data:audio/mpeg;base64,'+j.audio; som.playbackRate = voz===1 ? .8 : 1;
+    const acabou = ()=>{ if(feito) return; feito = true; clearTimeout(tm); fonte = null; if($('p-'+k).dataset.e==='falando') estado(k,'livre'); fim(); };
     try{ speechSynthesis.cancel(); }catch(e){}
-    await som.play();
-    tm = setTimeout(acabou, 3000 + texto.length*110);
+    const src = actx.createBufferSource(); src.buffer = buf; src.playbackRate.value = taxa; src.connect(actx.destination);
+    src.onended = acabou; fonte = src;
+    src.start(); tocando = true;
+    tm = setTimeout(acabou, buf.duration*1000/taxa + 700);
     estado(k,'falando');
-  }catch(e){ som.onended = som.onerror = null; falaAparelho(texto, k, fim); }   // sem limite, sem rede ou sem permissão de áudio: voz do aparelho
+  }catch(e){ if(!tocando) falaAparelho(texto, k, fim); }   // sem limite, sem rede ou áudio bloqueado: voz do aparelho
 }
 function falaAparelho(texto, k, fim){
   if(!('speechSynthesis' in window)){ fim(); return; }
@@ -728,7 +740,7 @@ document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState=
 if(!SR){ $('sem-voz').hidden = false; }
 $('comecar').addEventListener('click', ()=>{
   try{ speechSynthesis.speak(new SpeechSynthesisUtterance(' ')); }catch(e){}   // libera a voz no iPhone
-  try{ som.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA='; som.play().catch(()=>{}); }catch(e){}
+  destrava();
   $('inicio').hidden = true;
   telaAcesa();
   if(!SR){ $('frm-a').hidden = false; $('frm-b').hidden = false; }
