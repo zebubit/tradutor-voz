@@ -263,8 +263,21 @@ const VOZ = ['Voz','Lenta','Sem voz'];
 const hist = [];
 
 // ---------- tradução ----------
-async function traduz(texto, de, para){
+const MOTOR = 'https://n8n.dionefolador.com/webhook/tradutor-voz';
+async function traduz(texto, de, para, parcial){
   if(de.cod===para.cod) return texto;
+  // motor principal: Claude, com as duas últimas falas como contexto
+  try{
+    const u = hist[hist.length-1];
+    const corta = new AbortController(); const tm = setTimeout(()=>corta.abort(), 8000);
+    const r = await fetch(MOTOR, {method:'POST', headers:{'Content-Type':'application/json'}, signal:corta.signal,
+      body:JSON.stringify({texto:texto.slice(0,600), de:de.cod, para:para.cod, parcial:!!parcial, ctx:u ? u.orig+'\n'+u.trad : ''})});
+    clearTimeout(tm);
+    const j = await r.json();
+    if(r.ok && j.t) return j.t;
+  }catch(e){}
+  if(parcial) throw new Error('falha');
+  // reserva: motor gratuito
   const r = await fetch('https://api.mymemory.translated.net/get?q='+encodeURIComponent(texto)+'&langpair='+de.cod+'|'+para.cod);
   const j = await r.json();
   if(j.quotaFinished || +j.responseStatus===429) throw new Error('limite');
@@ -311,7 +324,7 @@ async function aoVivo(k, texto){
   const n = seq;
   while(pend && n===seq){
     const t0 = pend; pend = '';
-    try{ const t = await traduz(t0, P[k].lang, P[outro(k)].lang); if(n===seq) mostra(outro(k), t, S.trad, true); }catch(e){}
+    try{ const t = await traduz(t0, P[k].lang, P[outro(k)].lang, true); if(n===seq) mostra(outro(k), t, S.trad, true); }catch(e){}
     await new Promise(r=>setTimeout(r,900));
   }
   vivoOn = false;
