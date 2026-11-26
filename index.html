@@ -426,7 +426,6 @@ function regista(k, orig, trad){
 
 // ---------- modo escuta ----------
 // Ouve sem parar o idioma da outra pessoa (lado B) e mostra a legenda no seu idioma (lado A).
-const ANDROID = /Android/i.test(navigator.userAgent);
 let escOn = false, escRec = null, respondendo = false, respRec = null;
 function novaLinha(eu){
   const el = document.createElement('div'); el.className = 'ln vivo' + (eu?' eu':'');
@@ -455,23 +454,47 @@ async function fechaLinha(L){
 function cicloEscuta(){
   if(!escOn || respondendo) return;
   const r = new SR(); escRec = r;
-  r.lang = P.b.lang.bcp; r.interimResults = true; r.continuous = !ANDROID;   // no Android o modo contínuo repete frases
-  const linhas = {}; let erro = '';
+  r.lang = P.b.lang.bcp; r.interimResults = true; r.continuous = true;   // sem pausa entre frases, para não perder áudio
+  let feito = 0, L = null, erro = '', repete = /Android/i.test(navigator.userAgent), pausa = null, fim = 0;
+  const t0 = Date.now();
+  const fecha = txt=>{ const l = L || novaLinha(); L = null; l.txt = txt; l.o.textContent = txt; fechaLinha(l); };
   r.onresult = e=>{
-    for(let i=e.resultIndex;i<e.results.length;i++){
-      const L = linhas[i] || (linhas[i] = novaLinha());
-      if(L.fim) continue;
-      L.txt = e.results[i][0].transcript.trim(); L.o.textContent = L.txt;
-      if(e.results[i].isFinal) fechaLinha(L); else previaLinha(L);
+    // Texto inteiro da sessão. No Android cada resultado repete os anteriores: o que repete substitui em vez de somar.
+    let tudo = '', firme = 0;
+    for(let i=0;i<e.results.length;i++){
+      const t = e.results[i][0].transcript.trim(); if(!t) continue;
+      if(tudo && t.toLowerCase().startsWith(tudo.toLowerCase())){ tudo = t; repete = true; } else tudo = tudo ? tudo+' '+t : t;
+      if(e.results[i].isFinal) firme = tudo.length;
     }
+    if(feito > tudo.length) feito = tudo.length;
+    fim = tudo.length;
+    // Quando os resultados se repetem, "confirmado" não é confiável: vale o fim de frase, e a pausa fecha o resto.
+    if(repete){ firme = feito; const m = tudo.slice(feito).match(/^.{40,}[.?!。？！](?=\s|$)/); if(m) firme = feito + m[0].length; }
+    // Fecha uma linha a cada trecho confirmado, ou perto de 200 letras quando a pessoa fala sem pausa.
+    for(;;){
+      let corte = firme > feito ? firme : tudo.length;
+      if(corte - feito > 220){
+        const jan = tudo.slice(feito, feito+200), fr = jan.match(/^.{60,}[.?!。？！](?=\s)/), sp = jan.lastIndexOf(' ');
+        corte = feito + (fr ? fr[0].length : sp > 60 ? sp : 200);
+      }
+      else if(firme <= feito) break;
+      const txt = tudo.slice(feito, corte).trim(); feito = corte;
+      if(txt) fecha(txt);
+    }
+    const aberto = tudo.slice(feito).trim();
+    if(aberto){ if(!L) L = novaLinha(); L.txt = aberto; L.o.textContent = aberto; previaLinha(L); }
+    else if(L){ L.fim = true; L.el.remove(); L = null; }
+    clearTimeout(pausa);
+    if(repete && L) pausa = setTimeout(()=>{ if(L){ const l = L; L = null; feito = fim; fechaLinha(l); } }, 1300);
     $('esc-l').scrollTop = 1e6;
   };
   r.onerror = e=>{ erro = e.error; };
   r.onend = ()=>{
-    Object.values(linhas).forEach(L=>{ if(!L.fim) fechaLinha(L); });
+    clearTimeout(pausa);
+    if(L){ const l = L; L = null; fechaLinha(l); }
     if(escRec===r) escRec = null;
     if(erro==='not-allowed' || erro==='service-not-allowed'){ $('esc-st').textContent = 'Libere o microfone nas permissões do navegador.'; escOn = false; return; }
-    if(escOn && !respondendo) setTimeout(cicloEscuta, erro && erro!=='no-speech' ? 800 : 60);
+    if(escOn && !respondendo){ setTimeout(cicloEscuta, erro && erro!=='no-speech' ? 800 : Date.now()-t0 < 1000 ? 400 : 0); }
   };
   try{ r.start(); }catch(e){ setTimeout(cicloEscuta, 800); }
 }
