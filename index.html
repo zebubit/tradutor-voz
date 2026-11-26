@@ -127,6 +127,23 @@
   .sec{flex:1;height:48px;border-radius:14px;border:1px solid var(--linha);background:var(--sup2);font-weight:600;font-size:15px}
   .sec.ouro{border-color:var(--a);color:var(--a)}
 
+  /* modo escuta: legenda contínua de uma chamada no viva-voz */
+  .esc{position:fixed;inset:0;z-index:15;background:radial-gradient(120% 50% at 50% 0%,rgba(63,214,232,.10),transparent 60%),var(--bg);display:flex;flex-direction:column;padding:max(10px,env(safe-area-inset-top)) 16px max(14px,env(safe-area-inset-bottom))}
+  .esc[hidden]{display:none}
+  .esc-top{display:flex;align-items:center;gap:10px;min-height:48px;border-bottom:1px solid var(--linha);padding-bottom:6px}
+  .esc-top b{flex:1;font-size:15px}
+  .esc-top .pt{width:10px;height:10px;border-radius:50%;background:var(--b);animation:pisca 1.4s ease-in-out infinite}
+  @keyframes pisca{50%{opacity:.25}}
+  .esc-l{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:16px;padding:14px 0}
+  .esc-l::before{content:"";margin-top:auto}
+  .ln{border-left:3px solid var(--b);padding-left:12px}
+  .ln.eu{border-color:var(--a)}
+  .ln small{display:block;font-size:14px;color:var(--mut);line-height:1.35}
+  .ln p{font-size:22px;font-weight:700;line-height:1.25;margin-top:3px;min-height:27px}
+  .ln.vivo p{opacity:.55}
+  .esc-base{--c:var(--a);--ct:var(--a-t);display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:8px}
+  .esc-base .rot{font-size:13px;font-weight:600;color:var(--mut)}
+
   @media (min-width:700px){
     .app{max-width:520px;margin:0 auto;border-inline:1px solid var(--linha)}
   }
@@ -141,6 +158,7 @@
   <nav class="centro" aria-label="Controles">
     <button class="cbtn" id="b-troca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M7 20l-4-4M7 20l4-4M17 20V4M17 4l-4 4M17 4l4 4"/></svg>Trocar</button>
     <button class="cbtn" id="b-auto" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-12.5 6.6L3 20l1.4-4.6A8 8 0 1 1 21 12z"/><path d="M9 11v2M12 9v6M15 11v2"/></svg>Conversa</button>
+    <button class="cbtn" id="b-esc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 11h4M14 11h3M7 15h7"/></svg>Escuta</button>
     <button class="cbtn" id="b-mesa" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="12" height="18" rx="2.5"/><path d="M10 7.5h4M10 16.5h4"/></svg>Mesa</button>
     <button class="cbtn" id="b-voz"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/></svg><span id="voz-l">Voz</span></button>
     <button class="cbtn" id="b-hist"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Histórico<span class="n" id="hist-n"></span></button>
@@ -156,10 +174,25 @@
       <li><b>1</b><span>Escolha os dois idiomas, um em cada metade da tela.</span></li>
       <li><b>2</b><span>Toque no seu microfone e fale. Toque de novo se quiser encerrar antes.</span></li>
       <li><b>3</b><span>Ligue <strong>Conversa</strong> para o microfone alternar sozinho entre vocês.</span></li>
+      <li><b>4</b><span>Em chamada no viva-voz, use <strong>Escuta</strong>: legenda contínua do que a outra pessoa fala.</span></li>
     </ol>
     <div class="aviso" id="sem-voz" hidden>Este navegador não reconhece voz. Abra no Chrome (Android) ou no Safari (iPhone) para falar. Aqui você ainda pode digitar e ouvir a tradução.</div>
     <button class="pri" id="comecar">Começar</button>
     <div class="ass">Zebubit · criado por Dione Folador</div>
+  </div>
+</div>
+
+<div class="esc" id="esc" role="dialog" aria-modal="true" aria-labelledby="esc-t" hidden>
+  <div class="esc-top">
+    <span class="pt"></span>
+    <b id="esc-t"></b>
+    <button class="ico" id="esc-x" aria-label="Parar a escuta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="esc-l" id="esc-l" aria-live="polite"></div>
+  <div class="esc-base" id="esc-base" data-e="livre">
+    <span class="st" id="esc-st"></span>
+    <button class="mic" id="esc-mic"><span class="eq"><i></i><i></i><i></i><i></i><i></i></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+    <span class="rot" id="esc-rot"></span>
   </div>
 </div>
 
@@ -346,8 +379,7 @@ async function conclui(k, texto){
     if(n!==seq) return;
     P[k].ultimo = texto; P[o].ultimo = t;
     mostra(o, t, S.trad); status(o,''); estado(k,'livre');
-    hist.push({h:new Date(), k, de:P[k].lang, para:P[o].lang, orig:texto, trad:t});
-    $('hist-n').textContent = hist.length;
+    regista(k, texto, t);
     if(navigator.vibrate) navigator.vibrate(18);
     falar(t, o, ()=>{ ocupado = false; estado(o,'livre'); if(auto && SR) escuta(o); });
   }catch(err){
@@ -386,6 +418,117 @@ function escuta(k){
   };
   try{ rec.start(); }catch(e){ rec = null; ocupado = false; estado(k,'livre'); estado(o,'livre'); status(k,''); dica(k); }
 }
+
+function regista(k, orig, trad){
+  hist.push({h:new Date(), k, de:P[k].lang, para:P[outro(k)].lang, orig, trad});
+  $('hist-n').textContent = hist.length;
+}
+
+// ---------- modo escuta ----------
+// Ouve sem parar o idioma da outra pessoa (lado B) e mostra a legenda no seu idioma (lado A).
+const ANDROID = /Android/i.test(navigator.userAgent);
+let escOn = false, escRec = null, respondendo = false, respRec = null;
+function novaLinha(eu){
+  const el = document.createElement('div'); el.className = 'ln vivo' + (eu?' eu':'');
+  const o = document.createElement('small'), t = document.createElement('p');
+  o.dir = P[eu?'a':'b'].lang.rtl?'rtl':'ltr'; t.dir = P[eu?'b':'a'].lang.rtl?'rtl':'ltr';
+  const d = $('esc-dica'); if(d) d.remove();
+  el.append(o,t); $('esc-l').appendChild(el); $('esc-l').scrollTop = 1e6;
+  return {el, o, t, txt:'', fim:false, busca:false};
+}
+async function previaLinha(L){
+  if(L.busca || L.txt.length<12) return;
+  L.busca = true;
+  const t0 = L.txt;
+  try{ const t = await traduz(t0, P.b.lang, P.a.lang, true); if(!L.fim){ L.t.textContent = t; $('esc-l').scrollTop = 1e6; } }catch(e){}
+  await new Promise(r=>setTimeout(r,1200));
+  L.busca = false;
+  if(!L.fim && L.txt!==t0) previaLinha(L);
+}
+async function fechaLinha(L){
+  L.fim = true;
+  if(!L.txt){ L.el.remove(); return; }
+  try{ const t = await traduz(L.txt, P.b.lang, P.a.lang); L.t.textContent = t; regista('b', L.txt, t); }
+  catch(e){ if(!L.t.textContent) L.t.textContent = 'Sem conexão para traduzir.'; }
+  L.el.classList.remove('vivo'); $('esc-l').scrollTop = 1e6;
+}
+function cicloEscuta(){
+  if(!escOn || respondendo) return;
+  const r = new SR(); escRec = r;
+  r.lang = P.b.lang.bcp; r.interimResults = true; r.continuous = !ANDROID;   // no Android o modo contínuo repete frases
+  const linhas = {}; let erro = '';
+  r.onresult = e=>{
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const L = linhas[i] || (linhas[i] = novaLinha());
+      if(L.fim) continue;
+      L.txt = e.results[i][0].transcript.trim(); L.o.textContent = L.txt;
+      if(e.results[i].isFinal) fechaLinha(L); else previaLinha(L);
+    }
+    $('esc-l').scrollTop = 1e6;
+  };
+  r.onerror = e=>{ erro = e.error; };
+  r.onend = ()=>{
+    Object.values(linhas).forEach(L=>{ if(!L.fim) fechaLinha(L); });
+    if(escRec===r) escRec = null;
+    if(erro==='not-allowed' || erro==='service-not-allowed'){ $('esc-st').textContent = 'Libere o microfone nas permissões do navegador.'; escOn = false; return; }
+    if(escOn && !respondendo) setTimeout(cicloEscuta, erro && erro!=='no-speech' ? 800 : 60);
+  };
+  try{ r.start(); }catch(e){ setTimeout(cicloEscuta, 800); }
+}
+function responde(){
+  if(respondendo){ if(respRec){ try{ respRec.stop() }catch(e){} } return; }
+  if(!$('esc').hidden && !SR) return;
+  respondendo = true;
+  try{ if(escRec) escRec.abort(); }catch(e){}
+  const base = $('esc-base'), L = novaLinha(true);
+  let fin = '', tudo = '';
+  const volta = ()=>{ respondendo = false; respRec = null; base.dataset.e = 'livre'; $('esc-st').textContent = ''; if(escOn) cicloEscuta(); };
+  const r = new SR(); respRec = r;
+  r.lang = P.a.lang.bcp; r.interimResults = true;
+  r.onresult = e=>{
+    let parcial = '';
+    for(let i=e.resultIndex;i<e.results.length;i++){ const t = e.results[i][0].transcript; if(e.results[i].isFinal) fin += t; else parcial += t; }
+    tudo = (fin+parcial).trim(); L.o.textContent = tudo; $('esc-l').scrollTop = 1e6;
+  };
+  r.onerror = ()=>{};
+  r.onend = async ()=>{
+    const txt = fin.trim() || tudo;
+    if(!txt){ L.el.remove(); volta(); return; }
+    base.dataset.e = 'traduzindo'; $('esc-st').textContent = frase('a',S.traduzindo);
+    try{
+      const t = await traduz(txt, P.a.lang, P.b.lang);
+      L.t.textContent = t; L.el.classList.remove('vivo'); regista('a', txt, t);
+      base.dataset.e = 'espera'; $('esc-st').textContent = voz===2 ? '' : 'Falando a tradução para a chamada…';
+      falar(t, 'b', volta);
+    }catch(e){ L.t.textContent = 'Sem conexão para traduzir.'; L.el.classList.remove('vivo'); volta(); }
+  };
+  base.dataset.e = 'ouvindo'; $('esc-st').textContent = frase('a',S.ouvindo);
+  setTimeout(()=>{ try{ r.start(); }catch(e){ L.el.remove(); volta(); } }, 250);   // espera a escuta soltar o microfone
+}
+function escutaLiga(){
+  if(ocupado) return;
+  if(!SR){ status('a','Este navegador não reconhece voz. Abra no Chrome ou no Safari.'); return; }
+  try{ speechSynthesis.cancel() }catch(e){}
+  ocupado = true; escOn = true;
+  $('esc-t').textContent = 'Ouvindo ' + P.b.lang.nome + ' → ' + P.a.lang.nome;
+  $('esc-rot').textContent = 'Responder em ' + P.a.lang.nome;
+  $('esc-mic').setAttribute('aria-label', 'Responder em ' + P.a.lang.nome);
+  $('esc-st').textContent = '';
+  if(!$('esc-l').children.length){ const d = document.createElement('div'); d.className = 'vazio'; d.id = 'esc-dica'; d.textContent = 'Coloque a chamada no viva-voz e deixe este aparelho perto do alto-falante. A legenda aparece aqui.'; $('esc-l').appendChild(d); }
+  $('esc').hidden = false;
+  cicloEscuta();
+}
+function escutaDesliga(){
+  escOn = false; respondendo = false;
+  [escRec, respRec].forEach(r=>{ try{ if(r) r.abort() }catch(e){} });
+  escRec = respRec = null;
+  try{ speechSynthesis.cancel() }catch(e){}
+  $('esc-base').dataset.e = 'livre';
+  $('esc').hidden = true; ocupado = false;
+}
+$('b-esc').addEventListener('click', escutaLiga);
+$('esc-x').addEventListener('click', escutaDesliga);
+$('esc-mic').addEventListener('click', responde);
 
 // ---------- digitar ----------
 function abreTeclado(k){
@@ -457,7 +600,7 @@ $('hist-envia').addEventListener('click', async ()=>{
     else { await navigator.clipboard.writeText(txt); b.textContent = 'Copiado'; setTimeout(()=>b.textContent='Compartilhar', 1800); }
   }catch(e){}
 });
-document.addEventListener('keydown', e=>{ if(e.key==='Escape') $('hist').hidden = true; });
+document.addEventListener('keydown', e=>{ if(e.key!=='Escape') return; if(!$('hist').hidden) $('hist').hidden = true; else if(!$('esc').hidden) escutaDesliga(); });
 
 // ---------- início ----------
 let trava = null;
