@@ -125,6 +125,7 @@
   .rotulo{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin:14px 0 8px}
   .ops{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
   #op-tim{grid-template-columns:1fr 1fr}
+  .caixa{overflow-y:auto}
   .op{min-height:48px;padding:6px 8px;border-radius:14px;background:var(--sup2);border:1px solid var(--linha);font-size:15px}
   .op[aria-pressed="true"]{border-color:var(--a);color:var(--a);background:rgba(237,187,74,.10)}
   .nota{font-size:13px!important}
@@ -235,6 +236,10 @@
     <div class="ops" id="op-tim">
       <button class="op" data-t="ap">Do aparelho</button><button class="op" data-t="m">Masculina</button><button class="op" data-t="f">Feminina</button><button class="op" data-t="eu">Minha voz</button>
     </div>
+    <div class="rotulo">Voz da outra pessoa traduzida</div>
+    <div class="ops" id="op-tb">
+      <button class="op" data-t="ap">Do aparelho</button><button class="op" data-t="m">Masculina</button><button class="op" data-t="f">Feminina</button>
+    </div>
     <p class="nota" id="vozf-nota"></p>
     <form class="cod" id="vozf-cod" hidden>
       <label for="cod-i">Código de acesso</label>
@@ -330,6 +335,7 @@ let voz = +guarda.ler('voz',0);            // 0 normal, 1 lenta, 2 sem voz
 const VOZ = ['Voz','Lenta','Sem voz'];
 let cod = guarda.ler('cod','');             // código de acesso das vozes premium
 let timbre = cod ? guarda.ler('timbre','ap') : 'ap';   // ap aparelho, m masculina, f feminina, eu voz clonada
+let timbreB = cod ? guarda.ler('timbreB','ap') : 'ap';   // voz da tradução do que a outra pessoa fala: ap, m ou f
 const TIMBRE = {m:'Masculina', f:'Feminina', eu:'Minha voz'};
 const hist = [];
 
@@ -372,21 +378,22 @@ function cala(){ try{ speechSynthesis.cancel(); }catch(e){} try{ if(fonte) fonte
 function falar(texto, k, fim){
   fim = fim || (()=>{});
   if(voz===2 || !texto){ fim(); return; }
-  // voz premium só na fala de quem segura o aparelho (lado A, dita no idioma do lado B)
-  if(k==='b' && timbre!=='ap' && cod && texto.length<=300) falaPremium(texto, k, fim);
+  // k é o painel onde a tradução aparece: no B sai a fala de quem segura o aparelho, no A a da outra pessoa
+  const t = k==='b' ? timbre : timbreB;
+  if(t!=='ap' && cod && texto.length<=300) falaPremium(texto, k, fim, t);
   else falaAparelho(texto, k, fim);
 }
-async function falaPremium(texto, k, fim){
+async function falaPremium(texto, k, fim, t){
   const espera = (p, ms)=>Promise.race([p, new Promise((_,no)=>setTimeout(()=>no(new Error('demora')), ms))]);
   let tocando = false;
   try{
     if(!actx) throw 0;
     const corta = new AbortController(); const tc = setTimeout(()=>corta.abort(), 7000);
     const r = await fetch(FALA, {method:'POST', headers:{'Content-Type':'application/json'}, signal:corta.signal,
-      body:JSON.stringify({codigo:cod, voz:timbre, lang:P[k].lang.cod, texto})});
+      body:JSON.stringify({codigo:cod, voz:t, lang:P[k].lang.cod, texto})});
     clearTimeout(tc);
     const j = await r.json();
-    if(r.status===401){ cod = ''; timbre = 'ap'; guarda.por('cod',''); pinta(); }
+    if(r.status===401){ cod = ''; timbre = timbreB = 'ap'; guarda.por('cod',''); pinta(); }
     if(!j.audio) throw 0;
     const bin = atob(j.audio), bytes = new Uint8Array(bin.length);
     for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
@@ -659,7 +666,8 @@ function pinta(){
   $('b-voz').setAttribute('aria-label', 'Voz da tradução: '+rv);
   document.querySelectorAll('#op-vel .op').forEach(b=>b.setAttribute('aria-pressed', +b.dataset.v===voz));
   document.querySelectorAll('#op-tim .op').forEach(b=>b.setAttribute('aria-pressed', b.dataset.t===timbre));
-  $('vozf-nota').textContent = (cod ? 'Vozes liberadas neste aparelho.' : 'Masculina, Feminina e Minha voz pedem código de acesso.') + ' A tradução do que a outra pessoa fala usa sempre a voz do aparelho.';
+  document.querySelectorAll('#op-tb .op').forEach(b=>b.setAttribute('aria-pressed', b.dataset.t===timbreB));
+  $('vozf-nota').textContent = cod ? 'Vozes liberadas neste aparelho.' : 'Masculina, Feminina e Minha voz pedem código de acesso.';
 }
 $('b-troca').addEventListener('click', ()=>{
   if(ocupado) return;
@@ -667,18 +675,19 @@ $('b-troca').addEventListener('click', ()=>{
   aplicaIdioma('a'); aplicaIdioma('b');
 });
 $('b-auto').addEventListener('click', ()=>{ auto = !auto; guarda.por('auto', auto?1:0); pinta(); });
-let querTimbre = '';
+let querTimbre = '', querLado = 'a';
 const fechaVoz = ()=>{ $('vozf').hidden = true; $('vozf-cod').hidden = true; };
 $('b-voz').addEventListener('click', ()=>{ pinta(); $('cod-erro').hidden = true; $('vozf').hidden = false; });
 $('vozf-x').addEventListener('click', fechaVoz);
 $('vozf').addEventListener('click', e=>{ if(e.target===$('vozf')) fechaVoz(); });
 $('op-vel').addEventListener('click', e=>{ const b = e.target.closest('.op'); if(!b) return; voz = +b.dataset.v; guarda.por('voz', voz); if(voz===2) cala(); pinta(); });
-$('op-tim').addEventListener('click', e=>{
+const poeTimbre = (lado, t)=>{ if(lado==='b'){ timbreB = t; guarda.por('timbreB', t); } else { timbre = t; guarda.por('timbre', t); } };
+[['op-tim','a'],['op-tb','b']].forEach(([id, lado])=>$(id).addEventListener('click', e=>{
   const b = e.target.closest('.op'); if(!b) return;
   const t = b.dataset.t;
-  if(t!=='ap' && !cod){ querTimbre = t; $('cod-erro').hidden = true; $('vozf-cod').hidden = false; $('cod-i').focus(); return; }
-  timbre = t; guarda.por('timbre', t); $('vozf-cod').hidden = true; pinta();
-});
+  if(t!=='ap' && !cod){ querTimbre = t; querLado = lado; $('cod-erro').hidden = true; $('vozf-cod').hidden = false; $('cod-i').focus(); return; }
+  poeTimbre(lado, t); $('vozf-cod').hidden = true; pinta();
+}));
 $('vozf-cod').addEventListener('submit', async e=>{
   e.preventDefault();
   const c = $('cod-i').value.trim().toLowerCase(), bt = $('cod-ok'), er = $('cod-erro');
@@ -688,7 +697,7 @@ $('vozf-cod').addEventListener('submit', async e=>{
   try{
     const r = await fetch(FALA, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({codigo:c, checa:true})});
     const j = await r.json();
-    if(j.ok){ cod = c; timbre = querTimbre || 'eu'; guarda.por('cod', c); guarda.por('timbre', timbre); $('cod-i').value = ''; $('vozf-cod').hidden = true; pinta(); }
+    if(j.ok){ cod = c; guarda.por('cod', c); poeTimbre(querLado, querTimbre || 'eu'); $('cod-i').value = ''; $('vozf-cod').hidden = true; pinta(); }
     else msg = j.erro==='travado' ? 'Muitas tentativas hoje. Tente de novo amanhã.' : 'Código não confere. Veja se digitou certo.';
   }catch(err){ msg = 'Sem conexão para conferir o código. Tente de novo.'; }
   if(msg){ er.textContent = msg; er.hidden = false; }
