@@ -234,11 +234,11 @@
     </div>
     <div class="rotulo">Voz da sua fala traduzida</div>
     <div class="ops" id="op-tim">
-      <button class="op" data-t="ap">Do aparelho</button><button class="op" data-t="m">Masculina</button><button class="op" data-t="f">Feminina</button><button class="op" data-t="eu">Minha voz</button>
+      <button class="op" data-t="ap">Padrão</button><button class="op" data-t="m">Masculina</button><button class="op" data-t="f">Feminina</button><button class="op" data-t="eu">Minha voz</button>
     </div>
     <div class="rotulo">Voz da outra pessoa traduzida</div>
     <div class="ops" id="op-tb">
-      <button class="op" data-t="ap">Do aparelho</button><button class="op" data-t="m">Masculina</button><button class="op" data-t="f">Feminina</button>
+      <button class="op" data-t="ap">Padrão</button><button class="op" data-t="m">Masculina</button><button class="op" data-t="f">Feminina</button>
     </div>
     <p class="nota" id="vozf-nota"></p>
     <form class="cod" id="vozf-cod" hidden>
@@ -334,8 +334,8 @@ let auto = guarda.ler('auto','0')==='1';
 let voz = +guarda.ler('voz',0);            // 0 normal, 1 lenta, 2 sem voz
 const VOZ = ['Voz','Lenta','Sem voz'];
 let cod = guarda.ler('cod','');             // código de acesso das vozes premium
-let timbre = cod ? guarda.ler('timbre','ap') : 'ap';   // ap aparelho, m masculina, f feminina, eu voz clonada
-let timbreB = cod ? guarda.ler('timbreB','ap') : 'ap';   // voz da tradução do que a outra pessoa fala: ap, m ou f
+let timbre = guarda.ler('timbre','ap'); if(timbre==='eu' && !cod) timbre = 'ap';   // ap aparelho, m masculina, f feminina, eu voz clonada
+let timbreB = guarda.ler('timbreB','ap');   // voz da tradução do que a outra pessoa fala: ap, m ou f
 const TIMBRE = {m:'Masculina', f:'Feminina', eu:'Minha voz'};
 const hist = [];
 
@@ -364,9 +364,15 @@ async function traduz(texto, de, para, parcial){
 }
 
 // ---------- voz ----------
-function melhorVoz(bcp){
-  const vs = speechSynthesis.getVoices().filter(v=>v.lang && v.lang.replace('_','-').slice(0,2)===bcp.slice(0,2));
-  const nota = v => (v.lang.replace('_','-')===bcp?4:0) + (/natural|premium|enhanced|neural|siri/i.test(v.name)?3:0) + (/google/i.test(v.name)?2:0) + (v.localService?0:1);
+const HOMEM = /\b(male|masculin\w*|homem|daniel|felipe|jorge|diego|juan|carlos|thomas|jacques|luca|maged|majed|tarik|xander|yuri|otoya|hattori|aaron|fred|alex|tom|evan|nathan|arthur|oliver|gordon|rishi|markus|yannick|viktor|martin|cem|neel|albert|ralph|bruce|junior|antonio|guy|reed|rocko|eddy|grandpa)\b/i;
+const MULHER = /\b(female|feminin\w*|mulher|luciana|fernanda|samantha|karen|moira|tessa|monica|paulina|amelie|am[ée]lie|marie|anna|petra|alice|federica|laila|mariam|lekha|tingting|ting-ting|meijia|mei-jia|sinji|sin-ji|kyoko|o-ren|yuna|milena|katya|yelda|nicky|ava|allison|susan|zoe|catarina|joana|francisca|flo|grandma|sandy|shelley)\b/i;
+const genero = v => /\bfemale\b/i.test(v.name) ? 'f' : HOMEM.test(v.name) ? 'm' : MULHER.test(v.name) ? 'f' : '';
+function vozesDe(bcp){ return speechSynthesis.getVoices().filter(v=>v.lang && v.lang.replace('_','-').slice(0,2)===bcp.slice(0,2)); }
+function temVoz(bcp, g){ try{ return vozesDe(bcp).some(v=>genero(v)===g); }catch(e){ return false; } }
+function melhorVoz(bcp, g){
+  const vs = vozesDe(bcp);
+  // vozes "de brinquedo" do iPhone (Eddy, Rocko, Grandpa…) só entram se não houver outra
+  const nota = v => (g && genero(v)===g?20:0) + (v.lang.replace('_','-')===bcp?4:0) + (/natural|premium|enhanced|neural|siri/i.test(v.name)?3:0) + (/google/i.test(v.name)?2:0) + (v.localService?0:1) - (/\b(eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley)\b/i.test(v.name)?6:0);
   return vs.sort((x,y)=>nota(y)-nota(x))[0];
 }
 const FALA = 'https://n8n.dionefolador.com/webhook/tradutor-voz-fala';
@@ -380,8 +386,8 @@ function falar(texto, k, fim){
   if(voz===2 || !texto){ fim(); return; }
   // k é o painel onde a tradução aparece: no B sai a fala de quem segura o aparelho, no A a da outra pessoa
   const t = k==='b' ? timbre : timbreB;
-  if(t!=='ap' && cod && texto.length<=300) falaPremium(texto, k, fim, t);
-  else falaAparelho(texto, k, fim);
+  if(t==='eu' && cod && texto.length<=300) falaPremium(texto, k, fim, t);
+  else falaAparelho(texto, k, fim, t);
 }
 async function falaPremium(texto, k, fim, t){
   const espera = (p, ms)=>Promise.race([p, new Promise((_,no)=>setTimeout(()=>no(new Error('demora')), ms))]);
@@ -393,7 +399,7 @@ async function falaPremium(texto, k, fim, t){
       body:JSON.stringify({codigo:cod, voz:t, lang:P[k].lang.cod, texto})});
     clearTimeout(tc);
     const j = await r.json();
-    if(r.status===401){ cod = ''; timbre = timbreB = 'ap'; guarda.por('cod',''); pinta(); }
+    if(r.status===401){ cod = ''; timbre = 'ap'; guarda.por('cod',''); pinta(); }
     if(!j.audio) throw 0;
     const bin = atob(j.audio), bytes = new Uint8Array(bin.length);
     for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
@@ -411,7 +417,7 @@ async function falaPremium(texto, k, fim, t){
     estado(k,'falando');
   }catch(e){ if(!tocando) falaAparelho(texto, k, fim); }   // sem limite, sem rede ou áudio bloqueado: voz do aparelho
 }
-function falaAparelho(texto, k, fim){
+function falaAparelho(texto, k, fim, g){
   if(!('speechSynthesis' in window)){ fim(); return; }
   let feito = false, tm;
   const acabou = ()=>{ if(feito) return; feito = true; clearTimeout(tm); if($('p-'+k).dataset.e==='falando') estado(k,'livre'); fim(); };
@@ -420,7 +426,7 @@ function falaAparelho(texto, k, fim){
     const u = new SpeechSynthesisUtterance(texto);
     const taxa = voz===1 ? .75 : 1;
     u.lang = P[k].lang.bcp; u.rate = taxa;
-    const v = melhorVoz(u.lang); if(v) u.voice = v;
+    const v = melhorVoz(u.lang, g==='m'||g==='f' ? g : ''); if(v) u.voice = v;
     u.onend = u.onerror = acabou;
     tm = setTimeout(acabou, 2000 + texto.length*95/taxa);   // alguns celulares não avisam o fim
     estado(k,'falando');
@@ -667,7 +673,9 @@ function pinta(){
   document.querySelectorAll('#op-vel .op').forEach(b=>b.setAttribute('aria-pressed', +b.dataset.v===voz));
   document.querySelectorAll('#op-tim .op').forEach(b=>b.setAttribute('aria-pressed', b.dataset.t===timbre));
   document.querySelectorAll('#op-tb .op').forEach(b=>b.setAttribute('aria-pressed', b.dataset.t===timbreB));
-  $('vozf-nota').textContent = cod ? 'Vozes liberadas neste aparelho.' : 'Masculina, Feminina e Minha voz pedem código de acesso.';
+  const falta = [];
+  [[timbre, P.b.lang],[timbreB, P.a.lang]].forEach(([t, l])=>{ if((t==='m'||t==='f') && 'speechSynthesis' in window && !temVoz(l.bcp, t)) falta.push('Este aparelho não tem voz '+(t==='m'?'masculina':'feminina')+' em '+l.nome+': vai usar a que tiver.'); });
+  $('vozf-nota').textContent = [...new Set(falta), cod ? 'Minha voz liberada neste aparelho.' : 'Minha voz pede código de acesso. As outras são as vozes do próprio aparelho.'].join(' ');
 }
 $('b-troca').addEventListener('click', ()=>{
   if(ocupado) return;
@@ -685,7 +693,7 @@ const poeTimbre = (lado, t)=>{ if(lado==='b'){ timbreB = t; guarda.por('timbreB'
 [['op-tim','a'],['op-tb','b']].forEach(([id, lado])=>$(id).addEventListener('click', e=>{
   const b = e.target.closest('.op'); if(!b) return;
   const t = b.dataset.t;
-  if(t!=='ap' && !cod){ querTimbre = t; querLado = lado; $('cod-erro').hidden = true; $('vozf-cod').hidden = false; $('cod-i').focus(); return; }
+  if(t==='eu' && !cod){ querTimbre = t; querLado = lado; $('cod-erro').hidden = true; $('vozf-cod').hidden = false; $('cod-i').focus(); return; }
   poeTimbre(lado, t); $('vozf-cod').hidden = true; pinta();
 }));
 $('vozf-cod').addEventListener('submit', async e=>{
