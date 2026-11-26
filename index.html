@@ -122,6 +122,17 @@
   .item small{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin-bottom:4px}
   .item em{display:block;font-style:normal;font-size:14px;color:var(--mut);line-height:1.35}
   .item strong{display:block;font-size:16px;line-height:1.35;margin-top:4px}
+  .rotulo{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin:14px 0 8px}
+  .ops{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
+  #op-tim{grid-template-columns:1fr 1fr}
+  .op{min-height:48px;padding:6px 8px;border-radius:14px;background:var(--sup2);border:1px solid var(--linha);font-size:15px}
+  .op[aria-pressed="true"]{border-color:var(--a);color:var(--a);background:rgba(237,187,74,.10)}
+  .nota{font-size:13px!important}
+  .cod{margin-top:14px}
+  .cod[hidden]{display:none}
+  .cod label{display:block;font-size:14px;margin-bottom:6px}
+  .cod input{width:100%;height:50px;border-radius:14px;border:1px solid var(--linha);background:var(--sup2);padding:0 14px;font-size:16px}
+  .cod input:focus{outline:none;border-color:var(--a)}
   .vazio{color:var(--mut);font-size:15px;text-align:center;padding:30px 10px}
   .linha2{display:flex;gap:10px;margin-top:14px}
   .sec{flex:1;height:48px;border-radius:14px;border:1px solid var(--linha);background:var(--sup2);font-weight:600;font-size:15px}
@@ -210,6 +221,30 @@
   </div>
 </div>
 
+<div class="folha" id="vozf" role="dialog" aria-modal="true" aria-labelledby="vozf-t" hidden>
+  <div class="caixa">
+    <div class="topo">
+      <h2 id="vozf-t">Voz da tradução</h2>
+      <button class="ico" id="vozf-x" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="rotulo">Velocidade</div>
+    <div class="ops" id="op-vel">
+      <button class="op" data-v="0">Normal</button><button class="op" data-v="1">Lenta</button><button class="op" data-v="2">Sem voz</button>
+    </div>
+    <div class="rotulo">Voz da sua fala traduzida</div>
+    <div class="ops" id="op-tim">
+      <button class="op" data-t="ap">Do aparelho</button><button class="op" data-t="m">Masculina</button><button class="op" data-t="f">Feminina</button><button class="op" data-t="eu">Minha voz</button>
+    </div>
+    <p class="nota" id="vozf-nota"></p>
+    <form class="cod" id="vozf-cod" hidden>
+      <label for="cod-i">Código de acesso</label>
+      <input id="cod-i" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="done">
+      <div class="aviso" id="cod-erro" role="alert" hidden></div>
+      <button class="pri" id="cod-ok">Liberar</button>
+    </form>
+  </div>
+</div>
+
 <script>
 const IDIOMAS = [
   {cod:'pt',    bcp:'pt-BR', nome:'Português', s:['Toque e fale','Ouvindo…','Traduzindo…','Não entendi. Tente de novo.','Digite aqui','Você disse','Tradução']},
@@ -293,6 +328,9 @@ let rec = null, quem = null, ocupado = false, seq = 0, pend = '', vivoOn = false
 let auto = guarda.ler('auto','0')==='1';
 let voz = +guarda.ler('voz',0);            // 0 normal, 1 lenta, 2 sem voz
 const VOZ = ['Voz','Lenta','Sem voz'];
+let cod = guarda.ler('cod','');             // código de acesso das vozes premium
+let timbre = cod ? guarda.ler('timbre','ap') : 'ap';   // ap aparelho, m masculina, f feminina, eu voz clonada
+const TIMBRE = {m:'Masculina', f:'Feminina', eu:'Minha voz'};
 const hist = [];
 
 // ---------- tradução ----------
@@ -325,13 +363,41 @@ function melhorVoz(bcp){
   const nota = v => (v.lang.replace('_','-')===bcp?4:0) + (/natural|premium|enhanced|neural|siri/i.test(v.name)?3:0) + (/google/i.test(v.name)?2:0) + (v.localService?0:1);
   return vs.sort((x,y)=>nota(y)-nota(x))[0];
 }
+const FALA = 'https://n8n.dionefolador.com/webhook/tradutor-voz-fala';
+const som = new Audio();
+function cala(){ try{ speechSynthesis.cancel(); }catch(e){} try{ som.pause(); }catch(e){} }
 function falar(texto, k, fim){
   fim = fim || (()=>{});
-  if(voz===2 || !('speechSynthesis' in window) || !texto){ fim(); return; }
+  if(voz===2 || !texto){ fim(); return; }
+  // voz premium só na fala de quem segura o aparelho (lado A, dita no idioma do lado B)
+  if(k==='b' && timbre!=='ap' && cod && texto.length<=300) falaPremium(texto, k, fim);
+  else falaAparelho(texto, k, fim);
+}
+async function falaPremium(texto, k, fim){
+  try{
+    const corta = new AbortController(); const tc = setTimeout(()=>corta.abort(), 7000);
+    const r = await fetch(FALA, {method:'POST', headers:{'Content-Type':'application/json'}, signal:corta.signal,
+      body:JSON.stringify({codigo:cod, voz:timbre, lang:P[k].lang.cod, texto})});
+    clearTimeout(tc);
+    const j = await r.json();
+    if(r.status===401){ cod = ''; timbre = 'ap'; guarda.por('cod',''); pinta(); }
+    if(!j.audio) throw 0;
+    let feito = false, tm;
+    const acabou = ()=>{ if(feito) return; feito = true; clearTimeout(tm); som.onended = som.onerror = null; if($('p-'+k).dataset.e==='falando') estado(k,'livre'); fim(); };
+    som.onended = acabou; som.onerror = ()=>{ if(!feito){ feito = true; clearTimeout(tm); falaAparelho(texto, k, fim); } };
+    som.src = 'data:audio/mpeg;base64,'+j.audio; som.playbackRate = voz===1 ? .8 : 1;
+    try{ speechSynthesis.cancel(); }catch(e){}
+    await som.play();
+    tm = setTimeout(acabou, 3000 + texto.length*110);
+    estado(k,'falando');
+  }catch(e){ som.onended = som.onerror = null; falaAparelho(texto, k, fim); }   // sem limite, sem rede ou sem permissão de áudio: voz do aparelho
+}
+function falaAparelho(texto, k, fim){
+  if(!('speechSynthesis' in window)){ fim(); return; }
   let feito = false, tm;
   const acabou = ()=>{ if(feito) return; feito = true; clearTimeout(tm); if($('p-'+k).dataset.e==='falando') estado(k,'livre'); fim(); };
   try{
-    speechSynthesis.cancel();
+    cala();
     const u = new SpeechSynthesisUtterance(texto);
     const taxa = voz===1 ? .75 : 1;
     u.lang = P[k].lang.bcp; u.rate = taxa;
@@ -390,7 +456,7 @@ async function conclui(k, texto){
 function escuta(k){
   if(ocupado){ if(rec && quem===k){ try{ rec.stop() }catch(e){} } return; }
   if(!SR){ abreTeclado(k); return; }
-  try{ speechSynthesis.cancel() }catch(e){}
+  cala();
   const o = outro(k);
   rec = new SR(); quem = k; ocupado = true;
   rec.lang = P[k].lang.bcp; rec.interimResults = true; rec.maxAlternatives = 1;
@@ -531,7 +597,7 @@ function responde(){
 function escutaLiga(){
   if(ocupado) return;
   if(!SR){ status('a','Este navegador não reconhece voz. Abra no Chrome ou no Safari.'); return; }
-  try{ speechSynthesis.cancel() }catch(e){}
+  cala();
   ocupado = true; escOn = true;
   $('esc-t').textContent = 'Ouvindo ' + P.b.lang.nome + ' → ' + P.a.lang.nome;
   $('esc-rot').textContent = 'Responder em ' + P.a.lang.nome;
@@ -545,7 +611,7 @@ function escutaDesliga(){
   escOn = false; respondendo = false;
   [escRec, respRec].forEach(r=>{ try{ if(r) r.abort() }catch(e){} });
   escRec = respRec = null;
-  try{ speechSynthesis.cancel() }catch(e){}
+  cala();
   $('esc-base').dataset.e = 'livre';
   $('esc').hidden = true; ocupado = false;
 }
@@ -576,8 +642,12 @@ function abreTeclado(k){
 // ---------- barra central ----------
 function pinta(){
   $('b-auto').setAttribute('aria-pressed', auto);
-  $('voz-l').textContent = VOZ[voz];
-  $('b-voz').setAttribute('aria-label', 'Voz da tradução: '+VOZ[voz]);
+  const rv = voz===0 && timbre!=='ap' ? TIMBRE[timbre] : VOZ[voz];
+  $('voz-l').textContent = rv;
+  $('b-voz').setAttribute('aria-label', 'Voz da tradução: '+rv);
+  document.querySelectorAll('#op-vel .op').forEach(b=>b.setAttribute('aria-pressed', +b.dataset.v===voz));
+  document.querySelectorAll('#op-tim .op').forEach(b=>b.setAttribute('aria-pressed', b.dataset.t===timbre));
+  $('vozf-nota').textContent = (cod ? 'Vozes liberadas neste aparelho.' : 'Masculina, Feminina e Minha voz pedem código de acesso.') + ' A tradução do que a outra pessoa fala usa sempre a voz do aparelho.';
 }
 $('b-troca').addEventListener('click', ()=>{
   if(ocupado) return;
@@ -585,7 +655,33 @@ $('b-troca').addEventListener('click', ()=>{
   aplicaIdioma('a'); aplicaIdioma('b');
 });
 $('b-auto').addEventListener('click', ()=>{ auto = !auto; guarda.por('auto', auto?1:0); pinta(); });
-$('b-voz').addEventListener('click', ()=>{ voz = (voz+1)%3; guarda.por('voz', voz); if(voz===2){ try{ speechSynthesis.cancel() }catch(e){} } pinta(); });
+let querTimbre = '';
+const fechaVoz = ()=>{ $('vozf').hidden = true; $('vozf-cod').hidden = true; };
+$('b-voz').addEventListener('click', ()=>{ pinta(); $('cod-erro').hidden = true; $('vozf').hidden = false; });
+$('vozf-x').addEventListener('click', fechaVoz);
+$('vozf').addEventListener('click', e=>{ if(e.target===$('vozf')) fechaVoz(); });
+$('op-vel').addEventListener('click', e=>{ const b = e.target.closest('.op'); if(!b) return; voz = +b.dataset.v; guarda.por('voz', voz); if(voz===2) cala(); pinta(); });
+$('op-tim').addEventListener('click', e=>{
+  const b = e.target.closest('.op'); if(!b) return;
+  const t = b.dataset.t;
+  if(t!=='ap' && !cod){ querTimbre = t; $('cod-erro').hidden = true; $('vozf-cod').hidden = false; $('cod-i').focus(); return; }
+  timbre = t; guarda.por('timbre', t); $('vozf-cod').hidden = true; pinta();
+});
+$('vozf-cod').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const c = $('cod-i').value.trim().toLowerCase(), bt = $('cod-ok'), er = $('cod-erro');
+  if(!c) return;
+  bt.disabled = true; bt.textContent = 'Conferindo…'; er.hidden = true;
+  let msg = '';
+  try{
+    const r = await fetch(FALA, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({codigo:c, checa:true})});
+    const j = await r.json();
+    if(j.ok){ cod = c; timbre = querTimbre || 'eu'; guarda.por('cod', c); guarda.por('timbre', timbre); $('cod-i').value = ''; $('vozf-cod').hidden = true; pinta(); }
+    else msg = j.erro==='travado' ? 'Muitas tentativas hoje. Tente de novo amanhã.' : 'Código não confere. Veja se digitou certo.';
+  }catch(err){ msg = 'Sem conexão para conferir o código. Tente de novo.'; }
+  if(msg){ er.textContent = msg; er.hidden = false; }
+  bt.disabled = false; bt.textContent = 'Liberar';
+});
 function mesa(lig){ $('app').classList.toggle('mesa', lig); $('b-mesa').setAttribute('aria-pressed', lig); guarda.por('mesa', lig?1:0); }
 $('b-mesa').addEventListener('click', ()=>mesa(!$('app').classList.contains('mesa')));
 mesa(guarda.ler('mesa','1')==='1');
@@ -623,7 +719,7 @@ $('hist-envia').addEventListener('click', async ()=>{
     else { await navigator.clipboard.writeText(txt); b.textContent = 'Copiado'; setTimeout(()=>b.textContent='Compartilhar', 1800); }
   }catch(e){}
 });
-document.addEventListener('keydown', e=>{ if(e.key!=='Escape') return; if(!$('hist').hidden) $('hist').hidden = true; else if(!$('esc').hidden) escutaDesliga(); });
+document.addEventListener('keydown', e=>{ if(e.key!=='Escape') return; if(!$('vozf').hidden) fechaVoz(); else if(!$('hist').hidden) $('hist').hidden = true; else if(!$('esc').hidden) escutaDesliga(); });
 
 // ---------- início ----------
 let trava = null;
@@ -632,6 +728,7 @@ document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState=
 if(!SR){ $('sem-voz').hidden = false; }
 $('comecar').addEventListener('click', ()=>{
   try{ speechSynthesis.speak(new SpeechSynthesisUtterance(' ')); }catch(e){}   // libera a voz no iPhone
+  try{ som.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA='; som.play().catch(()=>{}); }catch(e){}
   $('inicio').hidden = true;
   telaAcesa();
   if(!SR){ $('frm-a').hidden = false; $('frm-b').hidden = false; }
