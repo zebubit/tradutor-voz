@@ -840,7 +840,12 @@ const poeTimbre = (lado, t)=>{ if(lado==='b'){ timbreB = t; guarda.por('timbreB'
   const b = e.target.closest('.op'); if(!b) return;
   const t = b.dataset.t;
   if(t==='eu' && !cod){ querTimbre = t; querLado = lado; $('cod-erro').hidden = true; $('vozf-cod').hidden = false; $('cod-i').focus(); return; }
-  poeTimbre(lado, t); $('vozf-cod').hidden = true; pinta();
+  poeTimbre(lado, t); $('vozf-cod').hidden = true;
+  // a última escolha vale: tocar aqui solta a voz fixada pelo nome nesse idioma, e já toca um exemplo
+  const k = lado==='a' ? 'b' : 'a';
+  if(t!=='eu'){ guarda.por('vz.'+P[k].lang.bcp.slice(0,2), ''); listaVozes(); }
+  pinta();
+  if(t!=='eu' && voz!==2 && !ocupado) falar(frase(k, S.toque), k);
 }));
 $('vozf-cod').addEventListener('submit', async e=>{
   e.preventDefault();
