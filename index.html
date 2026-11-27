@@ -269,7 +269,7 @@
     </div>
     <div class="rotulo">Voz da outra pessoa traduzida</div>
     <div class="ops" id="op-tb">
-      <button class="op" data-t="ap">Padrão</button><button class="op" data-t="m">Masculina</button><button class="op" data-t="f">Feminina</button>
+      <button class="op" data-t="ap">Padrão</button><button class="op" data-t="m">Masculina</button><button class="op" data-t="f">Feminina</button><button class="op" data-t="eu">Minha voz</button>
     </div>
     <p class="nota" id="vozf-nota"></p>
     <div class="rotulo">Escolher a voz do aparelho pelo nome</div>
@@ -437,7 +437,7 @@ async function falaPremium(texto, k, fim, t){
       body:JSON.stringify({codigo:cod, voz:t, lang:P[k].lang.cod, vel, texto})});
     clearTimeout(tc);
     const j = await r.json();
-    if(r.status===401){ cod = ''; timbre = 'ap'; guarda.por('cod',''); pinta(); }
+    if(r.status===401){ cod = ''; timbre = 'ap'; timbreB = 'ap'; guarda.por('cod',''); pinta(); }
     if(r.status===429){ const av = 'Limite diário da sua voz atingido. Usando a voz do aparelho.'; status('a', av); if(!$('esc').hidden) $('esc-st').textContent = av; }
     if(!j.audio) throw 0;
     const bin = atob(j.audio), bytes = new Uint8Array(bin.length);
