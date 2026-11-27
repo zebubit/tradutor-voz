@@ -122,6 +122,13 @@
   .item small{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin-bottom:4px}
   .item em{display:block;font-style:normal;font-size:14px;color:var(--mut);line-height:1.35}
   .item strong{display:block;font-size:16px;line-height:1.35;margin-top:4px}
+  .chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 12px;scrollbar-width:none}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{flex:none;min-height:44px;padding:0 16px;border-radius:22px;background:var(--sup2);border:1px solid var(--linha);font-size:15px;white-space:nowrap}
+  .chip[aria-pressed="true"]{border-color:var(--a);color:var(--a);background:rgba(237,187,74,.10)}
+  #via .item strong{margin-top:0}
+  #via .item [dir=rtl]{text-align:right}
+  #via .item em{margin-top:4px}
   .rotulo{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin:14px 0 8px}
   .ops{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
   #op-tim,#op-vel{grid-template-columns:1fr 1fr}
@@ -175,6 +182,7 @@
     <button class="cbtn" id="b-troca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4v16M7 20l-4-4M7 20l4-4M17 20V4M17 4l-4 4M17 4l4 4"/></svg>Trocar</button>
     <button class="cbtn" id="b-auto" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-12.5 6.6L3 20l1.4-4.6A8 8 0 1 1 21 12z"/><path d="M9 11v2M12 9v6M15 11v2"/></svg>Conversa</button>
     <button class="cbtn" id="b-esc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 11h4M14 11h3M7 15h7"/></svg>Escuta</button>
+    <button class="cbtn" id="b-via"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="12" rx="2.5"/><path d="M9 8V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M3 13h18"/></svg>Viagem</button>
     <button class="cbtn" id="b-mesa" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="12" height="18" rx="2.5"/><path d="M10 7.5h4M10 16.5h4"/></svg>Mesa</button>
     <button class="cbtn" id="b-voz"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/></svg><span id="voz-l">Voz</span></button>
     <button class="cbtn" id="b-hist"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Histórico<span class="n" id="hist-n"></span></button>
@@ -191,6 +199,7 @@
       <li><b>2</b><span>Toque no seu microfone e fale. Toque de novo se quiser encerrar antes.</span></li>
       <li><b>3</b><span>Ligue <strong>Conversa</strong> para o microfone alternar sozinho entre vocês.</span></li>
       <li><b>4</b><span>Em chamada no viva-voz, use <strong>Escuta</strong>: legenda contínua do que a outra pessoa fala.</span></li>
+      <li><b>5</b><span>Viajando? Em <strong>Viagem</strong> há frases prontas para aeroporto, hotel, restaurante e emergência.</span></li>
     </ol>
     <div class="aviso" id="sem-voz" hidden>Este navegador não reconhece voz. Abra no Chrome (Android) ou no Safari (iPhone) para falar. Aqui você ainda pode digitar e ouvir a tradução.</div>
     <button class="pri" id="comecar">Começar</button>
@@ -223,6 +232,17 @@
       <button class="sec" id="hist-limpa">Limpar</button>
       <button class="sec ouro" id="hist-envia">Compartilhar</button>
     </div>
+  </div>
+</div>
+
+<div class="folha" id="via" role="dialog" aria-modal="true" aria-labelledby="via-t" hidden>
+  <div class="caixa">
+    <div class="topo">
+      <h2 id="via-t">Frases de viagem</h2>
+      <button class="ico" id="via-x" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="chips" id="via-c"></div>
+    <div class="lista" id="via-l"></div>
   </div>
 </div>
 
@@ -734,6 +754,46 @@ $('b-mesa').addEventListener('click', ()=>mesa(!$('app').classList.contains('mes
 mesa(guarda.ler('mesa','1')==='1');
 pinta();
 
+// ---------- frases de viagem ----------
+// Frases já traduzidas nos 13 idiomas (frases.json): tocar numa frase mostra e fala a tradução, sem gastar tradução.
+let FRASES = null, viaCat = 0;
+function desenhaVia(){
+  const C = $('via-c'), L = $('via-l'); C.textContent = ''; L.textContent = '';
+  if(!FRASES){ const v = document.createElement('div'); v.className = 'vazio'; v.textContent = FRASES===false ? 'Sem conexão para carregar as frases. Feche e tente de novo.' : 'Carregando…'; L.appendChild(v); return; }
+  const la = P.a.lang, lb = P.b.lang;
+  FRASES.forEach((c, i)=>{
+    const b = document.createElement('button'); b.className = 'chip'; b.textContent = c.n[la.cod] || c.n.pt; b.dir = la.rtl?'rtl':'ltr';
+    b.setAttribute('aria-pressed', i===viaCat);
+    b.addEventListener('click', ()=>{ viaCat = i; desenhaVia(); });
+    C.appendChild(b);
+  });
+  FRASES[viaCat].f.forEach(f=>{
+    const b = document.createElement('button'); b.className = 'item'; b.style.setProperty('--c', 'var(--a)');
+    const t = document.createElement('strong'); t.textContent = f[la.cod]; t.dir = la.rtl?'rtl':'ltr';
+    const e = document.createElement('em'); e.textContent = f[lb.cod]; e.dir = lb.rtl?'rtl':'ltr';
+    b.append(t, e);
+    b.addEventListener('click', ()=>falaFrase(f[la.cod], f[lb.cod]));
+    L.appendChild(b);
+  });
+  L.scrollTop = 0;
+}
+function falaFrase(orig, trad){
+  if(ocupado) return;
+  $('via').hidden = true;
+  ocupado = true; ++seq;
+  P.a.ultimo = orig; P.b.ultimo = trad;
+  mostra('a', orig, S.disse); mostra('b', trad, S.trad); status('a',''); status('b','');
+  regista('a', orig, trad);
+  falar(trad, 'b', ()=>{ ocupado = false; estado('b','livre'); if(auto && SR) escuta('b'); });
+}
+$('b-via').addEventListener('click', async ()=>{
+  if(ocupado) return;
+  $('via').hidden = false; desenhaVia();
+  if(!FRASES){ try{ FRASES = await (await fetch('frases.json')).json(); }catch(e){ FRASES = false; } desenhaVia(); if(FRASES===false) FRASES = null; }
+});
+$('via-x').addEventListener('click', ()=>{ $('via').hidden = true; });
+$('via').addEventListener('click', e=>{ if(e.target===$('via')) $('via').hidden = true; });
+
 // ---------- histórico ----------
 const hora = d => d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
 function desenhaHist(){
@@ -766,7 +826,7 @@ $('hist-envia').addEventListener('click', async ()=>{
     else { await navigator.clipboard.writeText(txt); b.textContent = 'Copiado'; setTimeout(()=>b.textContent='Compartilhar', 1800); }
   }catch(e){}
 });
-document.addEventListener('keydown', e=>{ if(e.key!=='Escape') return; if(!$('vozf').hidden) fechaVoz(); else if(!$('hist').hidden) $('hist').hidden = true; else if(!$('esc').hidden) escutaDesliga(); });
+document.addEventListener('keydown', e=>{ if(e.key!=='Escape') return; if(!$('via').hidden) $('via').hidden = true; else if(!$('vozf').hidden) fechaVoz(); else if(!$('hist').hidden) $('hist').hidden = true; else if(!$('esc').hidden) escutaDesliga(); });
 
 // ---------- início ----------
 let trava = null;
