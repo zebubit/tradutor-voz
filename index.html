@@ -124,7 +124,11 @@
   .item strong{display:block;font-size:16px;line-height:1.35;margin-top:4px}
   .rotulo{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin:14px 0 8px}
   .ops{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
-  #op-tim{grid-template-columns:1fr 1fr}
+  #op-tim,#op-vel{grid-template-columns:1fr 1fr}
+  .vel{display:flex;align-items:center;gap:12px}
+  .vel input{flex:1;min-width:0;height:44px;accent-color:var(--a)}
+  .vel output{min-width:52px;text-align:right;font-size:16px;font-weight:700;color:var(--a);font-variant-numeric:tabular-nums}
+  .vel-e{display:flex;justify-content:space-between;font-size:12px;color:var(--mut);margin:-4px 64px 10px 0}
   .caixa{overflow-y:auto}
   .op{min-height:48px;padding:6px 8px;border-radius:14px;background:var(--sup2);border:1px solid var(--linha);font-size:15px}
   .op[aria-pressed="true"]{border-color:var(--a);color:var(--a);background:rgba(237,187,74,.10)}
@@ -229,8 +233,13 @@
       <button class="ico" id="vozf-x" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
     <div class="rotulo">Velocidade</div>
+    <div class="vel">
+      <input type="range" id="vel" min="0.7" max="1.2" step="0.05" aria-label="Velocidade da voz">
+      <output id="vel-v" for="vel"></output>
+    </div>
+    <div class="vel-e"><span>Devagar</span><span>Rápido</span></div>
     <div class="ops" id="op-vel">
-      <button class="op" data-v="0">Normal</button><button class="op" data-v="1">Lenta</button><button class="op" data-v="2">Sem voz</button>
+      <button class="op" id="vel-teste">Ouvir exemplo</button><button class="op" id="vel-mudo" aria-pressed="false">Sem voz</button>
     </div>
     <div class="rotulo">Voz da sua fala traduzida</div>
     <div class="ops" id="op-tim">
@@ -331,8 +340,10 @@ function aplicaIdioma(k){
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null, quem = null, ocupado = false, seq = 0, pend = '', vivoOn = false;
 let auto = guarda.ler('auto','0')==='1';
-let voz = +guarda.ler('voz',0);            // 0 normal, 1 lenta, 2 sem voz
-const VOZ = ['Voz','Lenta','Sem voz'];
+let voz = +guarda.ler('voz',0)===2 ? 2 : 0;   // 0 com voz, 2 sem voz
+let vel = +guarda.ler('vel', +guarda.ler('voz',0)===1 ? .75 : .9);   // velocidade da voz, de 0,7 a 1,2
+if(!(vel>=.7 && vel<=1.2)) vel = .9;
+const VOZ = ['Voz','','Sem voz'];
 let cod = guarda.ler('cod','');             // código de acesso das vozes premium
 let timbre = guarda.ler('timbre','ap'); if(timbre==='eu' && !cod) timbre = 'ap';   // ap aparelho, m masculina, f feminina, eu voz clonada
 let timbreB = guarda.ler('timbreB','ap');   // voz da tradução do que a outra pessoa fala: ap, m ou f
@@ -396,7 +407,7 @@ async function falaPremium(texto, k, fim, t){
     if(!actx) throw 0;
     const corta = new AbortController(); const tc = setTimeout(()=>corta.abort(), 7000);
     const r = await fetch(FALA, {method:'POST', headers:{'Content-Type':'application/json'}, signal:corta.signal,
-      body:JSON.stringify({codigo:cod, voz:t, lang:P[k].lang.cod, texto})});
+      body:JSON.stringify({codigo:cod, voz:t, lang:P[k].lang.cod, vel, texto})});
     clearTimeout(tc);
     const j = await r.json();
     if(r.status===401){ cod = ''; timbre = 'ap'; guarda.por('cod',''); pinta(); }
@@ -406,14 +417,13 @@ async function falaPremium(texto, k, fim, t){
     const buf = await espera(new Promise((ok,no)=>actx.decodeAudioData(bytes.buffer, ok, no)), 3000);
     if(actx.state!=='running'){ try{ await espera(actx.resume(), 600); }catch(e){} }
     if(actx.state!=='running') throw 0;
-    const taxa = voz===1 ? .8 : 1;
     let feito = false, tm;
     const acabou = ()=>{ if(feito) return; feito = true; clearTimeout(tm); fonte = null; if($('p-'+k).dataset.e==='falando') estado(k,'livre'); fim(); };
     try{ speechSynthesis.cancel(); }catch(e){}
-    const src = actx.createBufferSource(); src.buffer = buf; src.playbackRate.value = taxa; src.connect(actx.destination);
+    const src = actx.createBufferSource(); src.buffer = buf; src.connect(actx.destination);
     src.onended = acabou; fonte = src;
     src.start(); tocando = true;
-    tm = setTimeout(acabou, buf.duration*1000/taxa + 700);
+    tm = setTimeout(acabou, buf.duration*1000 + 700);
     estado(k,'falando');
   }catch(e){ if(!tocando) falaAparelho(texto, k, fim); }   // sem limite, sem rede ou áudio bloqueado: voz do aparelho
 }
@@ -424,7 +434,7 @@ function falaAparelho(texto, k, fim, g){
   try{
     cala();
     const u = new SpeechSynthesisUtterance(texto);
-    const taxa = voz===1 ? .75 : 1;
+    const taxa = vel;
     u.lang = P[k].lang.bcp; u.rate = taxa;
     const v = melhorVoz(u.lang, g==='m'||g==='f' ? g : ''); if(v) u.voice = v;
     u.onend = u.onerror = acabou;
@@ -670,7 +680,8 @@ function pinta(){
   const rv = voz===0 && timbre!=='ap' ? TIMBRE[timbre] : VOZ[voz];
   $('voz-l').textContent = rv;
   $('b-voz').setAttribute('aria-label', 'Voz da tradução: '+rv);
-  document.querySelectorAll('#op-vel .op').forEach(b=>b.setAttribute('aria-pressed', +b.dataset.v===voz));
+  $('vel').value = vel; $('vel-v').textContent = vel.toFixed(2).replace('.',',')+'×';
+  $('vel-mudo').setAttribute('aria-pressed', voz===2);
   document.querySelectorAll('#op-tim .op').forEach(b=>b.setAttribute('aria-pressed', b.dataset.t===timbre));
   document.querySelectorAll('#op-tb .op').forEach(b=>b.setAttribute('aria-pressed', b.dataset.t===timbreB));
   const falta = [];
@@ -688,7 +699,10 @@ const fechaVoz = ()=>{ $('vozf').hidden = true; $('vozf-cod').hidden = true; };
 $('b-voz').addEventListener('click', ()=>{ pinta(); $('cod-erro').hidden = true; $('vozf').hidden = false; });
 $('vozf-x').addEventListener('click', fechaVoz);
 $('vozf').addEventListener('click', e=>{ if(e.target===$('vozf')) fechaVoz(); });
-$('op-vel').addEventListener('click', e=>{ const b = e.target.closest('.op'); if(!b) return; voz = +b.dataset.v; guarda.por('voz', voz); if(voz===2) cala(); pinta(); });
+$('vel').addEventListener('input', ()=>{ vel = +$('vel').value; guarda.por('vel', vel); pinta(); });
+$('vel-mudo').addEventListener('click', ()=>{ voz = voz===2 ? 0 : 2; guarda.por('voz', voz); if(voz===2) cala(); pinta(); });
+// exemplo: a última tradução da sua fala, ou uma frase curta no idioma da outra pessoa
+$('vel-teste').addEventListener('click', ()=>{ if(ocupado) return; if(voz===2){ voz = 0; guarda.por('voz', 0); pinta(); } falar(P.b.ultimo || frase('b', S.toque), 'b'); });
 const poeTimbre = (lado, t)=>{ if(lado==='b'){ timbreB = t; guarda.por('timbreB', t); } else { timbre = t; guarda.por('timbre', t); } };
 [['op-tim','a'],['op-tb','b']].forEach(([id, lado])=>$(id).addEventListener('click', e=>{
   const b = e.target.closest('.op'); if(!b) return;
@@ -729,7 +743,7 @@ function desenhaHist(){
     b.append(s,e,t);
     b.addEventListener('click', ()=>{
       if(voz===2 || ocupado) return;
-      try{ speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(x.trad); u.lang = x.para.bcp; u.rate = voz===1?.75:1; const v = melhorVoz(u.lang); if(v) u.voice = v; speechSynthesis.speak(u); }catch(err){}
+      try{ speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(x.trad); u.lang = x.para.bcp; u.rate = vel; const v = melhorVoz(u.lang); if(v) u.voice = v; speechSynthesis.speak(u); }catch(err){}
     });
     L.appendChild(b);
   });
