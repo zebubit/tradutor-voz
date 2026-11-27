@@ -573,8 +573,88 @@ async function fechaLinha(L){
   catch(e){ if(!L.t.textContent) L.t.textContent = 'Sem conexão para traduzir.'; }
   L.el.classList.remove('vivo'); $('esc-l').scrollTop = 1e6;
 }
+// Escuta pelo servidor (Deepgram): só com o código de acesso liberado. Pega melhor o áudio que vem de alto-falante.
+// O microfone vai em PCM por WebSocket; a senha temporária vem do n8n. Se falhar, volta ao reconhecimento do aparelho.
+const OUVE = 'https://n8n.dionefolador.com/webhook/tradutor-voz-ouve';
+let serv = null, servFalhas = 0;
+function servSolta(){   // solta só o microfone (a conexão fica aberta enquanto você responde)
+  if(!serv) return;
+  try{ serv.no.disconnect(); serv.no.onaudioprocess = null; }catch(e){}
+  try{ serv.src.disconnect(); }catch(e){}
+  try{ serv.stream.getTracks().forEach(t=>t.stop()); }catch(e){}
+  serv.no = serv.src = serv.stream = null;
+  if(serv.L){ const l = serv.L; serv.L = null; serv.ac = ''; fechaLinha(l); }
+}
+function servPara(){
+  if(!serv) return;
+  const s = serv; servSolta(); serv = null;
+  clearInterval(s.vivo); clearTimeout(s.prazo);
+  try{ s.ws.onclose = null; s.ws.close(); }catch(e){}
+}
+async function servMic(){
+  const s = serv;
+  if(!s.ws || s.ws.readyState!==1 || s.stream || s.pedindo) return;   // o microfone só abre com a conexão pronta
+  s.pedindo = true;
+  const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:true}});
+  s.pedindo = false;
+  if(serv!==s || !escOn || respondendo){ stream.getTracks().forEach(t=>t.stop()); return; }
+  destrava();
+  s.stream = stream; s.src = actx.createMediaStreamSource(stream);
+  s.no = actx.createScriptProcessor(4096, 1, 1);
+  const f = s.fator;
+  s.no.onaudioprocess = e=>{
+    if(s.ws.readyState!==1) return;
+    const x = e.inputBuffer.getChannelData(0), n = Math.floor(x.length/f), o = new Int16Array(n);
+    for(let i=0;i<n;i++){ let v = 0; for(let j=0;j<f;j++) v += x[i*f+j]; v = Math.max(-1, Math.min(1, v/f)); o[i] = v*32767; }
+    s.ws.send(o.buffer);
+  };
+  const mudo = actx.createGain(); mudo.gain.value = 0;
+  s.src.connect(s.no); s.no.connect(mudo); mudo.connect(actx.destination);
+}
+async function cicloServidor(){
+  if(serv){ try{ await servMic(); }catch(e){ servPara(); servFalhas = 9; cicloEscuta(); } return; }   // voltando de uma resposta
+  const s = serv = {ws:null, ac:'', L:null};
+  const cai = ()=>{ if(serv===s) servPara(); servFalhas++; if(escOn && !respondendo) setTimeout(cicloEscuta, 500); };
+  try{
+    destrava();
+    const r = await fetch(OUVE, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({codigo:cod})});
+    const j = await r.json();
+    if(!j.token){ servFalhas = 9; throw 0; }   // limite do dia ou código recusado: fica no aparelho
+    if(serv!==s || !escOn) return;
+    s.fator = Math.max(1, Math.floor(actx.sampleRate/16000));
+    const lg = P.b.lang.cod==='pt' ? 'pt-BR' : P.b.lang.cod;
+    const ws = s.ws = new WebSocket('wss://api.deepgram.com/v1/listen?model=nova-3&language='+lg+'&encoding=linear16&sample_rate='+Math.round(actx.sampleRate/s.fator)+'&channels=1&interim_results=true&smart_format=true&endpointing=400&utterance_end_ms=1300', ['bearer', j.token]);
+    ws.binaryType = 'arraybuffer';
+    const mostra = txt=>{ if(!s.L) s.L = novaLinha(); s.L.txt = txt; s.L.o.textContent = txt; previaLinha(s.L); $('esc-l').scrollTop = 1e6; };
+    const fecha = ()=>{ if(!s.ac) return; const l = s.L || novaLinha(); s.L = null; l.txt = s.ac; l.o.textContent = s.ac; s.ac = ''; fechaLinha(l); };
+    ws.onopen = async ()=>{
+      const tinha = servFalhas; servFalhas = 0;
+      $('esc-t').textContent = 'Ouvindo ' + P.b.lang.nome + ' → ' + P.a.lang.nome + ' · precisão alta';
+      s.vivo = setInterval(()=>{ try{ if(ws.readyState===1) ws.send('{"type":"KeepAlive"}'); }catch(e){} }, 4000);
+      s.prazo = setTimeout(()=>{ try{ ws.close(); }catch(e){} }, 15*60000);   // renova a conexão a cada 15 minutos
+      try{ await servMic(); }
+      catch(e){ servPara(); servFalhas = 9; if(e && e.name==='NotAllowedError'){ $('esc-st').textContent = 'Libere o microfone nas permissões do navegador.'; escOn = false; } else { servFalhas = Math.max(tinha, 9); cicloEscuta(); } }
+    };
+    ws.onmessage = m=>{
+      let d; try{ d = JSON.parse(m.data); }catch(e){ return; }
+      if(respondendo) return;
+      if(d.type==='UtteranceEnd'){ fecha(); return; }
+      if(d.type!=='Results' || !d.channel) return;
+      const t = ((d.channel.alternatives[0] || {}).transcript || '').trim();
+      if(!d.is_final){ if(t) mostra(s.ac ? s.ac+' '+t : t); return; }
+      if(t) s.ac = s.ac ? s.ac+' '+t : t;
+      if(!s.ac) return;
+      if(d.speech_final || s.ac.length>180 || (s.ac.length>40 && /[.?!。？！]$/.test(s.ac))) fecha(); else mostra(s.ac);
+    };
+    ws.onclose = ()=>{ if(serv===s){ servPara(); if(escOn && !respondendo) setTimeout(cicloEscuta, 300); } };
+    ws.onerror = ()=>{ try{ ws.onclose = null; }catch(e){} cai(); };
+  }catch(e){ cai(); }
+}
 function cicloEscuta(){
   if(!escOn || respondendo) return;
+  if(cod && servFalhas<2 && navigator.mediaDevices && window.WebSocket){ escRec = {abort:servSolta}; cicloServidor(); return; }
+  if(serv) servPara();
+  $('esc-t').textContent = 'Ouvindo ' + P.b.lang.nome + ' → ' + P.a.lang.nome;
   const r = new SR(); escRec = r;
   r.lang = P.b.lang.bcp; r.interimResults = true; r.continuous = true;   // sem pausa entre frases, para não perder áudio
   let feito = 0, L = null, erro = '', repete = /Android/i.test(navigator.userAgent), pausa = null, fim = 0;
@@ -667,6 +747,7 @@ function escutaDesliga(){
   escOn = false; respondendo = false;
   [escRec, respRec].forEach(r=>{ try{ if(r) r.abort() }catch(e){} });
   escRec = respRec = null;
+  servPara(); servFalhas = 0;
   cala();
   $('esc-base').dataset.e = 'livre';
   $('esc').hidden = true; ocupado = false;
