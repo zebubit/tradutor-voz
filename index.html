@@ -686,6 +686,10 @@ function pinta(){
   document.querySelectorAll('#op-tb .op').forEach(b=>b.setAttribute('aria-pressed', b.dataset.t===timbreB));
   const falta = [];
   [[timbre, P.b.lang],[timbreB, P.a.lang]].forEach(([t, l])=>{ if((t==='m'||t==='f') && 'speechSynthesis' in window && !temVoz(l.bcp, t)) falta.push('Este aparelho não tem voz '+(t==='m'?'masculina':'feminina')+' em '+l.nome+': vai usar a que tiver.'); });
+  // mostra qual voz do aparelho será usada em cada idioma, para conferir se a voz baixada apareceu
+  const usa = [];
+  if('speechSynthesis' in window) [[timbre, P.b.lang],[timbreB, P.a.lang]].forEach(([t, l])=>{ if(t==='eu') return; const v = melhorVoz(l.bcp, t==='ap' ? '' : t); if(v) usa.push(l.nome+': '+v.name.replace(/\s*\(.*$/, '')); });
+  if(usa.length) falta.push('Vozes do aparelho em uso: '+[...new Set(usa)].join(' · ')+'.');
   $('vozf-nota').textContent = [...new Set(falta), cod ? 'Minha voz liberada neste aparelho.' : 'Minha voz pede código de acesso. As outras são as vozes do próprio aparelho.'].join(' ');
 }
 $('b-troca').addEventListener('click', ()=>{
