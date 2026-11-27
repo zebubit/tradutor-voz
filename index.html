@@ -403,7 +403,8 @@ function temVoz(bcp, g){ try{ return vozesDe(bcp).some(v=>genero(v)===g); }catch
 function melhorVoz(bcp, g){
   const vs = vozesDe(bcp);
   // vozes "de brinquedo" do iPhone (Eddy, Rocko, Grandpa…) só entram se não houver outra
-  const nota = v => (g && genero(v)===g?20:0) + (v.lang.replace('_','-')===bcp?4:0) + (/natural|premium|enhanced|neural|siri/i.test(v.name)?3:0) + (/google/i.test(v.name)?2:0) + (v.localService?0:1) - (/\b(eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley)\b/i.test(v.name)?6:0);
+  const nota = v => (g && genero(v)===g?20:0) + (v.lang.replace('_','-')===bcp?4:0) + (/natural|premium|enhanced|neural|siri/i.test(v.name)?3:0) + (/google/i.test(v.name)?2:0) + (v.localService?0:1) - (/\b(eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley|fred|albert|ralph|junior|bruce|kathy)\b/i.test(v.name)?6:0)
+    - (/^en-IN/i.test(v.lang.replace('_','-')) && !/^en-IN/i.test(bcp)?25:0);   // inglês com sotaque indiano (Rishi) só se não houver outra voz
   return vs.sort((x,y)=>nota(y)-nota(x))[0];
 }
 const FALA = 'https://n8n.dionefolador.com/webhook/tradutor-voz-fala';
