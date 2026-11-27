@@ -143,6 +143,8 @@
   .cod{margin-top:14px}
   .cod[hidden]{display:none}
   .cod label{display:block;font-size:14px;margin-bottom:6px}
+  .vzs label{display:block;font-size:14px;margin:10px 0 6px}
+  .vzs select{width:100%;height:48px;border-radius:14px;border:1px solid var(--linha);background:var(--sup2);color:inherit;padding:0 12px;font-size:16px}
   .cod input{width:100%;height:50px;border-radius:14px;border:1px solid var(--linha);background:var(--sup2);padding:0 14px;font-size:16px}
   .cod input:focus{outline:none;border-color:var(--a)}
   .vazio{color:var(--mut);font-size:15px;text-align:center;padding:30px 10px}
@@ -270,6 +272,8 @@
       <button class="op" data-t="ap">Padrão</button><button class="op" data-t="m">Masculina</button><button class="op" data-t="f">Feminina</button>
     </div>
     <p class="nota" id="vozf-nota"></p>
+    <div class="rotulo">Escolher a voz do aparelho pelo nome</div>
+    <div class="vzs" id="vozf-vzs"></div>
     <form class="cod" id="vozf-cod" hidden>
       <label for="cod-i">Código de acesso</label>
       <input id="cod-i" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="done">
@@ -402,6 +406,8 @@ function vozesDe(bcp){ return speechSynthesis.getVoices().filter(v=>v.lang && v.
 function temVoz(bcp, g){ try{ return vozesDe(bcp).some(v=>genero(v)===g); }catch(e){ return false; } }
 function melhorVoz(bcp, g){
   const vs = vozesDe(bcp);
+  const fixa = guarda.ler('vz.'+bcp.slice(0,2), ''), vf = fixa && vs.find(v=>v.name===fixa);   // voz escolhida pelo nome vale mais que o gênero
+  if(vf) return vf;
   // vozes "de brinquedo" do iPhone (Eddy, Rocko, Grandpa…) só entram se não houver outra
   const nota = v => (g && genero(v)===g?20:0) + (v.lang.replace('_','-')===bcp?4:0) + (/natural|premium|enhanced|neural|siri/i.test(v.name)?3:0) + (/google/i.test(v.name)?2:0) + (v.localService?0:1) - (/\b(eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley|fred|albert|ralph|junior|bruce|kathy)\b/i.test(v.name)?6:0)
     - (/^en-IN/i.test(v.lang.replace('_','-')) && !/^en-IN/i.test(bcp)?25:0);   // inglês com sotaque indiano (Rishi) só se não houver outra voz
@@ -458,7 +464,7 @@ function falaAparelho(texto, k, fim, g){
     const u = new SpeechSynthesisUtterance(texto);
     const taxa = vel;
     u.lang = P[k].lang.bcp; u.rate = taxa;
-    const v = melhorVoz(u.lang, g==='m'||g==='f' ? g : ''); if(v) u.voice = v;
+    const v = melhorVoz(u.lang, g==='m'||g==='f' ? g : ''); if(v){ u.voice = v; u.lang = v.lang.replace('_','-'); }
     u.onend = u.onerror = acabou;
     tm = setTimeout(acabou, 2000 + texto.length*95/taxa);   // alguns celulares não avisam o fim
     estado(k,'falando');
@@ -803,7 +809,26 @@ $('b-troca').addEventListener('click', ()=>{
 $('b-auto').addEventListener('click', ()=>{ auto = !auto; guarda.por('auto', auto?1:0); pinta(); });
 let querTimbre = '', querLado = 'a';
 const fechaVoz = ()=>{ $('vozf').hidden = true; $('vozf-cod').hidden = true; };
-$('b-voz').addEventListener('click', ()=>{ pinta(); $('cod-erro').hidden = true; $('vozf').hidden = false; });
+// Lista as vozes que o aparelho realmente oferece em cada idioma da conversa, para escolher pelo nome.
+function listaVozes(){
+  const cx = $('vozf-vzs'); cx.textContent = '';
+  [...new Set([P.a.lang, P.b.lang])].forEach(lg=>{
+    const chave = 'vz.'+lg.bcp.slice(0,2), vs = vozesDe(lg.bcp).sort((x,y)=>x.name.localeCompare(y.name));
+    const rot = document.createElement('label'), sel = document.createElement('select');
+    rot.textContent = lg.nome + ' (' + vs.length + (vs.length===1 ? ' voz' : ' vozes') + ' neste aparelho)'; sel.setAttribute('aria-label', 'Voz em '+lg.nome);
+    sel.add(new Option('Automática', ''));
+    vs.forEach(v=>sel.add(new Option(v.name + ' · ' + v.lang.replace('_','-'), v.name)));
+    sel.value = vs.some(v=>v.name===guarda.ler(chave,'')) ? guarda.ler(chave,'') : '';
+    sel.addEventListener('change', ()=>{
+      guarda.por(chave, sel.value); pinta();
+      if(voz===2 || ocupado) return;
+      const k = lg===P.b.lang ? 'b' : 'a';
+      falaAparelho(frase(k, S.toque), k, ()=>{}, '');
+    });
+    cx.append(rot, sel);
+  });
+}
+$('b-voz').addEventListener('click', ()=>{ pinta(); listaVozes(); $('cod-erro').hidden = true; $('vozf').hidden = false; });
 $('vozf-x').addEventListener('click', fechaVoz);
 $('vozf').addEventListener('click', e=>{ if(e.target===$('vozf')) fechaVoz(); });
 $('vel').addEventListener('input', ()=>{ vel = +$('vel').value; guarda.por('vel', vel); pinta(); });
@@ -890,7 +915,7 @@ function desenhaHist(){
     b.append(s,e,t);
     b.addEventListener('click', ()=>{
       if(voz===2 || ocupado) return;
-      try{ speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(x.trad); u.lang = x.para.bcp; u.rate = vel; const v = melhorVoz(u.lang); if(v) u.voice = v; speechSynthesis.speak(u); }catch(err){}
+      try{ speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(x.trad); u.lang = x.para.bcp; u.rate = vel; const v = melhorVoz(u.lang); if(v){ u.voice = v; u.lang = v.lang.replace('_','-'); } speechSynthesis.speak(u); }catch(err){}
     });
     L.appendChild(b);
   });
